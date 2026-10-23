@@ -1,0 +1,33 @@
+[Version]
+Signature="$WINDOWS NT$"
+Class=Volume
+ClassGuid={71a27cdd-812a-11d0-bec7-08002be2092f}
+Provider=%PROV%
+DriverVer=08/08/2010, 1.0.0.0
+CatalogFile=Driver.cat
+CatalogFile.NTARM64 = testdriver.cat
+
+[DestinationDirs]
+DefaultDestDir = 12
+
+[Manufacturer]
+%StdMfg%=Standard,NTARM64
+
+[Standard.NTARM64]
+%Driver.DeviceDesc%=Driver_Device, STORAGE\Driver
+
+[Driver_Device.NTARM64]
+;
+; Nothing to do (these devices are raw). We just needed an INF
+; match so these don't show up as "unknown" devices.
+;
+
+;-------------- Service installation
+[Driver_Device.NTARM64.Services]
+AddService = ,2, ; Run the device RAW
+
+[Strings]
+PROV = "Copyright (C) 2015 DUMMY LLC"
+StdMfg = "(Standard system devices)"
+Driver.DeviceDesc = "Driver"
+
