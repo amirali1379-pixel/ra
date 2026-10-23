@@ -733,6 +733,9 @@ namespace grapher.Models.Mouse
 		
 		public event EventHandler<MouseSample> MouseSampleReceived;
 
+        // Raw input stream for calibration/tools that must not depend on Raw Accel's active-device filter.
+        public event EventHandler<MouseSample> RawMouseSampleReceived;
+
         private bool LastMoveNormalized { get; set; }
 
         private double PollTime
@@ -775,6 +778,16 @@ namespace grapher.Models.Mouse
 
                     break;
                 }
+            }
+
+            if (relative && (rawInput.Data.Mouse.LastX != 0 || rawInput.Data.Mouse.LastY != 0))
+            {
+                RawMouseSampleReceived?.Invoke(this, new MouseSample
+                {
+                    Timestamp = TrajectoryStopwatch.ElapsedTicks,
+                    DX = rawInput.Data.Mouse.LastX,
+                    DY = rawInput.Data.Mouse.LastY
+                });
             }
 
             if (relative && deviceMatch && (rawInput.Data.Mouse.LastX != 0 || rawInput.Data.Mouse.LastY != 0))
