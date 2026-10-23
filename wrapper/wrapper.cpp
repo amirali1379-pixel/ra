@@ -2,6 +2,7 @@
 
 #include "interop-exception.h"
 
+#include <cstring>
 #include <rawaccel-io.hpp>
 #include <rawaccel-validate.hpp>
 
@@ -14,6 +15,54 @@ using namespace Newtonsoft::Json;
 using namespace Newtonsoft::Json::Linq;
 
 namespace ra = rawaccel;
+
+// Sends the calibrated profile directly to the existing kernel callback. No SendInput
+// or second user-mode mouse stream is used, so packets are transformed exactly once.
+public ref class DesktopSensRuntime
+{
+public:
+    static void Apply(array<double>^ sensitivity, array<double>^ acceleration,
+                      array<double>^ rotationDegrees, double dpi)
+    {
+        if (sensitivity == nullptr || sensitivity->Length != ra::DESKTOPSENS_ANGLE_ZONES)
+            throw gcnew ArgumentException("DesktopSens requires exactly 32 sensitivity factors.");
+        if (acceleration == nullptr || acceleration->Length != ra::DESKTOPSENS_CELL_COUNT)
+            throw gcnew ArgumentException("DesktopSens requires exactly 736 acceleration factors.");
+        if (rotationDegrees == nullptr || rotationDegrees->Length != ra::DESKTOPSENS_CELL_COUNT)
+            throw gcnew ArgumentException("DesktopSens requires exactly 736 rotation offsets.");
+        if (Double::IsNaN(dpi) || Double::IsInfinity(dpi) || dpi < 100.0 || dpi > 30000.0)
+            throw gcnew ArgumentOutOfRangeException("dpi");
+
+        ra::desktop_sens_profile profile{};
+        profile.enabled = 1;
+        profile.dpi = dpi;
+        pin_ptr<double> sens = &sensitivity[0];
+        pin_ptr<double> accel = &acceleration[0];
+        pin_ptr<double> rotation = &rotationDegrees[0];
+        std::memcpy(profile.sensitivity, sens, sizeof(profile.sensitivity));
+        std::memcpy(profile.acceleration, accel, sizeof(profile.acceleration));
+        std::memcpy(profile.rotation_degrees, rotation, sizeof(profile.rotation_degrees));
+
+        try {
+            ra::io_control(ra::DESKTOPSENS_SET, &profile, sizeof(profile), nullptr, 0);
+        }
+        catch (const std::exception& e) {
+            throw gcnew InteropException(e);
+        }
+    }
+
+    static void Disable()
+    {
+        ra::desktop_sens_profile profile{};
+        profile.enabled = 0;
+        try {
+            ra::io_control(ra::DESKTOPSENS_SET, &profile, sizeof(profile), nullptr, 0);
+        }
+        catch (const std::exception& e) {
+            throw gcnew InteropException(e);
+        }
+    }
+};
 
 ra::modifier_settings default_modifier_settings;
 ra::device_settings default_device_settings;
