@@ -13,7 +13,22 @@ namespace grapher.DesktopSens.Models
         public List<double> RotationErrors = new List<double>();
 
         public double MeanError => SignedErrors.Count > 0 ? SignedErrors.Average() : 0.0;
-        public double MeanRotationError => RotationErrors.Count > 0 ? RotationErrors.Average() : 0.0;
+        public double MeanRotationError
+        {
+            get
+            {
+                if (RotationErrors.Count == 0) return 0.0;
+                double sin = 0.0;
+                double cos = 0.0;
+                foreach (double angle in RotationErrors)
+                {
+                    double radians = angle * Math.PI / 180.0;
+                    sin += Math.Sin(radians);
+                    cos += Math.Cos(radians);
+                }
+                return Math.Atan2(sin, cos) * 180.0 / Math.PI;
+            }
+        }
         public double Variance => SignedErrors.Count > 1
             ? SignedErrors.Select(e => Math.Pow(e - MeanError, 2)).Average()
             : 0.0;
