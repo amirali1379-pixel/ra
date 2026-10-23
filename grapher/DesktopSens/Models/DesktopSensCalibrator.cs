@@ -57,13 +57,26 @@ namespace grapher.DesktopSens.Models
             EnsureArray(ref profile.AccelerationFactor, DesktopSensConstants.DistanceZoneCount, 1.0);
             EnsureArray(ref profile.AccelerationConfidence, DesktopSensConstants.DistanceZoneCount, 0.0);
 
+            // Recompute from the current trial set. Never leave stale factors in cells whose
+            // observations were removed or are no longer valid.
+            ResetArray(profile.CellSensitivityFactor, 1.0);
+            ResetArray(profile.CellSensitivityConfidence, 0.0);
+            ResetArray(profile.CellAccelerationFactor, 1.0);
+            ResetArray(profile.CellAccelerationConfidence, 0.0);
+            ResetArray(profile.CellRotationOffsetDegrees, 0.0);
+            ResetArray(profile.CellRotationConfidence, 0.0);
+            ResetArray(profile.SensitivityFactor, 1.0);
+            ResetArray(profile.SensitivityConfidence, 0.0);
+            ResetArray(profile.AccelerationFactor, 1.0);
+            ResetArray(profile.AccelerationConfidence, 0.0);
+
             var cells = new Dictionary<int, ZoneData>();
             foreach (var trial in profile.Trials)
             {
-                if (trial == null ||
+                if (trial == null || !trial.HasMovementMeasurement ||
                     trial.AngleZoneIndex < 0 || trial.AngleZoneIndex >= DesktopSensConstants.AngularZoneCount ||
                     trial.DistanceZoneIndex < 0 || trial.DistanceZoneIndex >= DesktopSensConstants.DistanceZoneCount ||
-                    trial.TargetDistanceCm <= 0.0)
+                    !IsFinite(trial.TargetDistanceCm) || trial.TargetDistanceCm <= 0.0)
                     continue;
 
                 int cellIndex = DesktopSensProfile.GetCellIndex(trial.AngleZoneIndex, trial.DistanceZoneIndex);
@@ -89,7 +102,7 @@ namespace grapher.DesktopSens.Models
                 if (!IsFinite(signedError)) continue;
                 zone.SignedErrors.Add(signedError);
                 zone.TargetDistances.Add(trial.TargetDistanceCm);
-                if (IsFinite(trial.SignedRotationErrorDegrees))
+                if (trial.HasRotationMeasurement && IsFinite(trial.SignedRotationErrorDegrees))
                     zone.RotationErrors.Add(trial.SignedRotationErrorDegrees);
             }
 
@@ -174,6 +187,12 @@ namespace grapher.DesktopSens.Models
             profile.OverallConfidence = cells.Count == 0 ? 0.0 :
                 cells.Values.Average(c => Confidence(c.SignedErrors.Count));
             profile.ModifiedTimestamp = DateTime.UtcNow;
+        }
+
+        private static void ResetArray(double[] values, double defaultValue)
+        {
+            if (values == null) return;
+            for (int i = 0; i < values.Length; i++) values[i] = defaultValue;
         }
 
         private static void EnsureArray(ref double[] values, int length, double defaultValue)
