@@ -34,6 +34,8 @@ namespace grapher.DesktopSens.Models
         public bool IsOverFlick;
 
         public double FlickAngleDegrees;
+        // Signed shortest angular correction: target angle minus measured flick angle.
+        public double SignedRotationErrorDegrees;
         public double FlickDistanceCm;
         public double DurationMs;
         public double PeakVelocityPxPerSec;
