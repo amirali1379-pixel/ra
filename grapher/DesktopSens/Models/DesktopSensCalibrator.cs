@@ -10,8 +10,10 @@ namespace grapher.DesktopSens.Models
         public int DistanceZoneIndex;
         public List<double> SignedErrors = new List<double>();
         public List<double> TargetDistances = new List<double>();
+        public List<double> RotationErrors = new List<double>();
 
         public double MeanError => SignedErrors.Count > 0 ? SignedErrors.Average() : 0.0;
+        public double MeanRotationError => RotationErrors.Count > 0 ? RotationErrors.Average() : 0.0;
         public double Variance => SignedErrors.Count > 1
             ? SignedErrors.Select(e => Math.Pow(e - MeanError, 2)).Average()
             : 0.0;
@@ -33,6 +35,8 @@ namespace grapher.DesktopSens.Models
             EnsureArray(ref profile.CellSensitivityConfidence, DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount, 0.0);
             EnsureArray(ref profile.CellAccelerationFactor, DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount, 1.0);
             EnsureArray(ref profile.CellAccelerationConfidence, DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount, 0.0);
+            EnsureArray(ref profile.CellRotationOffsetDegrees, DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount, 0.0);
+            EnsureArray(ref profile.CellRotationConfidence, DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount, 0.0);
             EnsureArray(ref profile.SensitivityFactor, DesktopSensConstants.AngularZoneCount, 1.0);
             EnsureArray(ref profile.SensitivityConfidence, DesktopSensConstants.AngularZoneCount, 0.0);
             EnsureArray(ref profile.AccelerationFactor, DesktopSensConstants.DistanceZoneCount, 1.0);
@@ -70,6 +74,8 @@ namespace grapher.DesktopSens.Models
                 if (!IsFinite(signedError)) continue;
                 zone.SignedErrors.Add(signedError);
                 zone.TargetDistances.Add(trial.TargetDistanceCm);
+                if (IsFinite(trial.SignedRotationErrorDegrees))
+                    zone.RotationErrors.Add(trial.SignedRotationErrorDegrees);
             }
 
             var angleErrorTotals = new double[DesktopSensConstants.AngularZoneCount];
@@ -83,6 +89,11 @@ namespace grapher.DesktopSens.Models
                 ZoneData zone = pair.Value;
                 double targetCm = zone.TargetDistances.Average();
                 double signedErrorCm = zone.MeanError;
+                if (zone.RotationErrors.Count > 0)
+                {
+                    profile.CellRotationOffsetDegrees[cellIndex] = zone.MeanRotationError;
+                    profile.CellRotationConfidence[cellIndex] = Confidence(zone.RotationErrors.Count);
+                }
                 double observedCm = targetCm + signedErrorCm;
                 double factor;
 
@@ -103,10 +114,17 @@ namespace grapher.DesktopSens.Models
                     profile.CellAccelerationConfidence[cellIndex] = Confidence(zone.SignedErrors.Count);
                 }
 
-                angleErrorTotals[zone.AngleZoneIndex] += profile.CellSensitivityFactor[cellIndex] * zone.SignedErrors.Count;
-                angleCounts[zone.AngleZoneIndex] += zone.SignedErrors.Count;
-                distanceFactorTotals[zone.DistanceZoneIndex] += profile.CellAccelerationFactor[cellIndex] * zone.SignedErrors.Count;
-                distanceCounts[zone.DistanceZoneIndex] += zone.SignedErrors.Count;
+                // Only observations for the relevant correction dimension contribute to legacy summaries.
+                if (targetCm <= BaseZoneEndCm)
+                {
+                    angleErrorTotals[zone.AngleZoneIndex] += profile.CellSensitivityFactor[cellIndex] * zone.SignedErrors.Count;
+                    angleCounts[zone.AngleZoneIndex] += zone.SignedErrors.Count;
+                }
+                else
+                {
+                    distanceFactorTotals[zone.DistanceZoneIndex] += profile.CellAccelerationFactor[cellIndex] * zone.SignedErrors.Count;
+                    distanceCounts[zone.DistanceZoneIndex] += zone.SignedErrors.Count;
+                }
             }
 
             for (int angle = 0; angle < DesktopSensConstants.AngularZoneCount; angle++)
