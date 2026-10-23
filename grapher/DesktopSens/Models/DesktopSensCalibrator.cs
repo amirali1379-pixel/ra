@@ -89,7 +89,7 @@ namespace grapher.DesktopSens.Models
                 if (!IsFinite(signedError)) continue;
                 zone.SignedErrors.Add(signedError);
                 zone.TargetDistances.Add(trial.TargetDistanceCm);
-                if (IsFinite(trial.SignedRotationErrorDegrees))
+                if (trial.HasRotationMeasurement && IsFinite(trial.SignedRotationErrorDegrees))
                     zone.RotationErrors.Add(trial.SignedRotationErrorDegrees);
             }
 
