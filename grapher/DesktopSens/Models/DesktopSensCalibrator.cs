@@ -58,9 +58,13 @@ namespace grapher.DesktopSens.Models
                     cells.Add(cellIndex, zone);
                 }
 
-                // Older profiles do not have SignedErrorCm; reconstruct its sign from the old fields.
+                // Legacy trials have no projection measurement. Only use the legacy fallback
+                // when ProjectedDistanceCm is also absent; a new trial can have zero along-axis
+                // error but a non-zero lateral landing error.
                 double signedError = trial.SignedErrorCm;
-                if (Math.Abs(signedError) < 0.000001 && trial.FinalErrorCm > 0.0)
+                if (Math.Abs(signedError) < 0.000001 &&
+                    Math.Abs(trial.ProjectedDistanceCm) < 0.000001 &&
+                    trial.FinalErrorCm > 0.0)
                     signedError = trial.IsUnderFlick ? -trial.FinalErrorCm : trial.FinalErrorCm;
 
                 if (!IsFinite(signedError)) continue;
