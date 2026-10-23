@@ -197,6 +197,7 @@ namespace grapher.DesktopSens.Views
                 IsUnderFlick = signedErrorCm < 0.0,
                 IsOverFlick = signedErrorCm > 0.0,
                 FlickAngleDegrees = flickAngle,
+                SignedRotationErrorDegrees = NormalizeSignedAngle(targetAngle - flickAngle),
                 FlickDistanceCm = flickDistanceCm,
                 DurationMs = _trialStopwatch.Elapsed.TotalMilliseconds,
                 PeakVelocityPxPerSec = peakVelocity,
@@ -257,6 +258,12 @@ namespace grapher.DesktopSens.Views
             if (double.IsNaN(angle) || double.IsInfinity(angle)) return 0.0;
             angle %= 360.0;
             return angle < 0.0 ? angle + 360.0 : angle;
+        }
+
+        private static double NormalizeSignedAngle(double angle)
+        {
+            angle = NormalizeAngle(angle);
+            return angle > 180.0 ? angle - 360.0 : angle;
         }
 
         protected override void OnPaint(PaintEventArgs e)
