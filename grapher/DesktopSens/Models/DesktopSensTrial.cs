@@ -36,6 +36,7 @@ namespace grapher.DesktopSens.Models
         public double FlickAngleDegrees;
         // Signed shortest angular correction: target angle minus measured flick angle.
         public double SignedRotationErrorDegrees;
+        public bool HasRotationMeasurement;
         public double FlickDistanceCm;
         public double DurationMs;
         public double PeakVelocityPxPerSec;
