@@ -38,9 +38,7 @@ namespace desktop_sens
         void reset() noexcept;
 
     private:
-        double stroke_distance_cm_ = 0.0;
-        int previous_axis_ = -1;
-        double idle_ms_ = 0.0;
+        std::array<double, AngularZoneCount> axis_distance_cm_{};
     };
 
     int angle_to_zone(double angle_degrees) noexcept;
