@@ -924,17 +924,21 @@ private:
 public ref class DesktopSensRuntimeBridge
 {
 private:
-    desktop_sens::runtime* const instance = new desktop_sens::runtime();
+    desktop_sens::runtime* instance = new desktop_sens::runtime();
 
 public:
     virtual ~DesktopSensRuntimeBridge()
     {
-        delete instance;
+        this->!DesktopSensRuntimeBridge();
     }
 
     !DesktopSensRuntimeBridge()
     {
-        delete instance;
+        if (instance != nullptr)
+        {
+            delete instance;
+            instance = nullptr;
+        }
     }
 
     // Returns (processedDx, processedDy, activeAxis, distanceZone, strokeDistanceCm).
