@@ -60,7 +60,7 @@ namespace grapher.DesktopSens.Models
             var cells = new Dictionary<int, ZoneData>();
             foreach (var trial in profile.Trials)
             {
-                if (trial == null ||
+                if (trial == null || !trial.HasMovementMeasurement ||
                     trial.AngleZoneIndex < 0 || trial.AngleZoneIndex >= DesktopSensConstants.AngularZoneCount ||
                     trial.DistanceZoneIndex < 0 || trial.DistanceZoneIndex >= DesktopSensConstants.DistanceZoneCount ||
                     trial.TargetDistanceCm <= 0.0)
