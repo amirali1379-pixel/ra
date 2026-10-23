@@ -37,12 +37,42 @@ namespace grapher.DesktopSens.Models
             int angleIndex = ZoneCalculations.AngleToZoneIndex(angleDegrees);
             int distanceIndex = ZoneCalculations.DistanceToZoneIndex(distanceCm);
             int cellIndex = DesktopSensProfile.GetCellIndex(angleIndex, distanceIndex);
-            if (profile.CellRotationOffsetDegrees == null ||
-                cellIndex >= profile.CellRotationOffsetDegrees.Length)
-                return 0.0;
 
-            double correction = profile.CellRotationOffsetDegrees[cellIndex];
-            return double.IsNaN(correction) || double.IsInfinity(correction) ? 0.0 : correction;
+            double cellCorrection = 0.0;
+            bool hasCellCorrection = profile.CellRotationOffsetDegrees != null &&
+                cellIndex < profile.CellRotationOffsetDegrees.Length &&
+                !double.IsNaN(profile.CellRotationOffsetDegrees[cellIndex]) &&
+                !double.IsInfinity(profile.CellRotationOffsetDegrees[cellIndex]);
+            if (hasCellCorrection)
+                cellCorrection = profile.CellRotationOffsetDegrees[cellIndex];
+
+            // Keep the calibrated per-axis/per-distance cell as the primary source whenever it
+            // has evidence. Non-zero values are also honored for older profiles without confidence.
+            bool hasCellConfidence = profile.CellRotationConfidence != null &&
+                cellIndex < profile.CellRotationConfidence.Length &&
+                profile.CellRotationConfidence[cellIndex] > 0.0;
+            if (hasCellCorrection && (hasCellConfidence || Math.Abs(cellCorrection) > 1e-9))
+                return NormalizeSignedAngle(cellCorrection);
+
+            // When a particular cell has not been measured, use only a validated Fourier model
+            // fitted for that same distance zone. Never fall back to one global 1-D rotation curve.
+            if (profile.RotationModelsByDistanceZone != null &&
+                distanceIndex < profile.RotationModelsByDistanceZone.Length)
+            {
+                RotationModel model = profile.RotationModelsByDistanceZone[distanceIndex];
+                if (DesktopSensRotationModelFitter.IsUsable(model))
+                    return DesktopSensRotationModelFitter.EvaluateDegrees(model, angleDegrees);
+            }
+
+            return hasCellCorrection ? NormalizeSignedAngle(cellCorrection) : 0.0;
+        }
+
+        private static double NormalizeSignedAngle(double angle)
+        {
+            angle %= 360.0;
+            if (angle > 180.0) angle -= 360.0;
+            if (angle < -180.0) angle += 360.0;
+            return angle;
         }
 
         private static double ReadFactor(double[] values, int index, double fallback)
