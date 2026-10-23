@@ -205,6 +205,7 @@ namespace grapher.DesktopSens.Views
                 IsOverFlick = signedErrorCm > 0.0,
                 FlickAngleDegrees = flickAngle,
                 SignedRotationErrorDegrees = NormalizeSignedAngle(targetAngle - flickAngle),
+                HasRotationMeasurement = actualDistancePx >= 0.25 * _pixelsPerCm,
                 FlickDistanceCm = flickDistanceCm,
                 DurationMs = _trialStopwatch.Elapsed.TotalMilliseconds,
                 PeakVelocityPxPerSec = peakVelocity,
