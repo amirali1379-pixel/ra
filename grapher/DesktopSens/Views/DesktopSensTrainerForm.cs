@@ -22,6 +22,7 @@ namespace grapher.DesktopSens.Views
         private PointF _startPos;
         private PointF _targetPos;
         private PointF _currentCursorPos;
+        private PointF _rawLandedPos;
         private readonly float _pixelsPerCm = 20.0f;
         private readonly int[] _angleZoneCounts = new int[DesktopSensConstants.AngularZoneCount];
         private readonly int[] _distanceZoneCounts = new int[DesktopSensConstants.DistanceZoneCount];
@@ -105,6 +106,9 @@ namespace grapher.DesktopSens.Views
             }
             else if (_state == TrialState.Flicking)
             {
+                // Preserve the actual mouse-flick landing before keyboard correction. Sens/accel
+                // learn from this raw landing; rotation must not be hidden by the ASDW adjustment.
+                _rawLandedPos = _currentCursorPos;
                 _state = TrialState.ASDWAdjusting;
             }
             else if (_state == TrialState.TrialComplete)
@@ -167,8 +171,8 @@ namespace grapher.DesktopSens.Views
             if (targetDistancePx <= 0.0) return;
 
             double targetAngle = NormalizeAngle(Math.Atan2(targetDy, targetDx) * 180.0 / Math.PI);
-            double actualDx = _currentCursorPos.X - _startPos.X;
-            double actualDy = _currentCursorPos.Y - _startPos.Y;
+            double actualDx = _rawLandedPos.X - _startPos.X;
+            double actualDy = _rawLandedPos.Y - _startPos.Y;
             double actualDistancePx = Math.Sqrt(actualDx * actualDx + actualDy * actualDy);
             double targetUnitX = targetDx / targetDistancePx;
             double targetUnitY = targetDy / targetDistancePx;
