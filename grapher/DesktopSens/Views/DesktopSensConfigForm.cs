@@ -52,7 +52,7 @@ namespace grapher.DesktopSens.Views
                 using (var trainer = new DesktopSensTrainerForm(_profile))
                 {
                     EventHandler<MouseSample> handler = (sender, sample) => trainer.OnMouseSample(sample);
-                    _accelGUI.MouseWatcher.MouseSampleReceived += handler;
+                    _accelGUI.MouseWatcher.RawMouseSampleReceived += handler;
                     try
                     {
                         Hide();
@@ -61,7 +61,7 @@ namespace grapher.DesktopSens.Views
                     finally
                     {
                         Show();
-                        _accelGUI.MouseWatcher.MouseSampleReceived -= handler;
+                        _accelGUI.MouseWatcher.RawMouseSampleReceived -= handler;
                     }
                 }
                 _profileStatus.Text = "Trials: " + _profile.Trials.Count + " | Select Calibrate && Save to persist";
