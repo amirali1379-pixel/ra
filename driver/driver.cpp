@@ -27,6 +27,8 @@ struct {
     ra::modifier_settings* modifier_data;
     ra::device_settings* device_data;
     milliseconds tick_interval;
+    KSPIN_LOCK desktop_sens_lock;
+    ra::desktop_sens_profile desktop_sens;
 } global = {};
 
 extern "C" PULONG InitSafeBootMode;
@@ -78,11 +80,10 @@ Arguments:
     auto num_packets = InputDataEnd - InputDataStart;
 
     if (num_packets > 0 &&
-        !(InputDataStart->Flags & MOUSE_MOVE_ABSOLUTE) &&
-        devExt->enable) {
-        
+        !(InputDataStart->Flags & MOUSE_MOVE_ABSOLUTE)) {
+
         milliseconds time;
-        if (devExt->keep_time) {
+        if (devExt->enable && devExt->keep_time) {
             counter_t now = KeQueryPerformanceCounter(NULL).QuadPart;
             counter_t ticks = now - devExt->counter;
             devExt->counter = now;
@@ -90,46 +91,147 @@ Arguments:
             time = ra::clampsd(raw, devExt->clamp.min, devExt->clamp.max);
         }
         else {
-            time = devExt->clamp.min;
+            time = devExt->enable ? devExt->clamp.min : 1.0;
         }
 
         auto it = InputDataStart;
         do {
-            if (devExt->set_extra_info) {
-                union {
-                    short input[2];
-                    ULONG data;
-                } u = { short(it->LastX), short(it->LastY) };
+            const LONG raw_x = it->LastX;
+            const LONG raw_y = it->LastY;
 
-                it->ExtraInformation = u.data;
+            if (devExt->enable) {
+                if (devExt->set_extra_info) {
+                    union {
+                        short input[2];
+                        ULONG data;
+                    } u = { short(raw_x), short(raw_y) };
+                    it->ExtraInformation = u.data;
+                }
+
+                if (raw_x || raw_y) {
+                    vec2d input = {
+                        static_cast<double>(raw_x),
+                        static_cast<double>(raw_y)
+                    };
+
+                    devExt->mod.modify(input, devExt->speed_processor, devExt->mod_settings, devExt->input_dpi_normalization_factor, time);
+
+                    double carried_result_x = input.x + devExt->carry.x;
+                    double carried_result_y = input.y + devExt->carry.y;
+                    LONG out_x = static_cast<LONG>(carried_result_x);
+                    LONG out_y = static_cast<LONG>(carried_result_y);
+                    double carry_x = carried_result_x - out_x;
+                    double carry_y = carried_result_y - out_y;
+
+                    if (ValidCarry(carry_x, carry_y)) {
+                        devExt->carry.x = carry_x;
+                        devExt->carry.y = carry_y;
+                        it->LastX = out_x;
+                        it->LastY = out_y;
+                    }
+                }
             }
 
-            if (it->LastX || it->LastY) {
-                vec2d input = {
-                    static_cast<double>(it->LastX),
-                    static_cast<double>(it->LastY)
-                };
+            // DesktopSens is a final stage in this same driver callback. It also runs
+            // when Raw Accel is disabled, without injecting a second mouse stream.
+            if (raw_x || raw_y) {
+                ra::desktop_sens_profile profile;
+                KIRQL old_irql;
+                KeAcquireSpinLock(&global.desktop_sens_lock, &old_irql);
+                profile.enabled = global.desktop_sens.enabled;
+                profile.dpi = global.desktop_sens.dpi;
+                KeReleaseSpinLock(&global.desktop_sens_lock, old_irql);
 
-                devExt->mod.modify(input, devExt->speed_processor, devExt->mod_settings, devExt->input_dpi_normalization_factor, time);
+                if (profile.enabled && profile.dpi >= 100.0 && profile.dpi <= 30000.0) {
+                    counter_t now = KeQueryPerformanceCounter(NULL).QuadPart;
+                    if (devExt->desktop_sens_last_counter != 0) {
+                        double elapsed_ms = (now - devExt->desktop_sens_last_counter) * global.tick_interval;
+                        if (elapsed_ms > 200.0) {
+                            devExt->desktop_sens_stroke_x = 0.0;
+                            devExt->desktop_sens_stroke_y = 0.0;
+                        }
+                    }
 
-                double carried_result_x = input.x + devExt->carry.x;
-                double carried_result_y = input.y + devExt->carry.y;
+                    devExt->desktop_sens_stroke_x += static_cast<double>(raw_x);
+                    devExt->desktop_sens_stroke_y += static_cast<double>(raw_y);
+                    devExt->desktop_sens_last_counter = now;
 
-                LONG out_x = static_cast<LONG>(carried_result_x);
-                LONG out_y = static_cast<LONG>(carried_result_y);
+                    double stroke_x = devExt->desktop_sens_stroke_x;
+                    double stroke_y = devExt->desktop_sens_stroke_y;
+                    double stroke_distance_counts = sqrt(stroke_x * stroke_x + stroke_y * stroke_y);
+                    double distance_cm = stroke_distance_counts * 2.54 / profile.dpi;
+                    double angle_degrees = atan2(stroke_y, stroke_x) * 180.0 / 3.14159265358979323846;
+                    if (angle_degrees < 0.0) angle_degrees += 360.0;
 
-                double carry_x = carried_result_x - out_x;
-                double carry_y = carried_result_y - out_y;
+                    ULONG angle_index = static_cast<ULONG>(angle_degrees / 11.25);
+                    if (angle_index >= ra::DESKTOPSENS_ANGLE_ZONES) angle_index = ra::DESKTOPSENS_ANGLE_ZONES - 1;
 
-                if (ValidCarry(carry_x, carry_y)) {
-                    devExt->carry.x = carry_x;
-                    devExt->carry.y = carry_y;
-                    it->LastX = out_x;
-                    it->LastY = out_y;
+                    ULONG distance_index;
+                    if (distance_cm < 3.0) {
+                        distance_index = static_cast<ULONG>(distance_cm / 0.5);
+                        if (distance_index >= 6) distance_index = 5;
+                    }
+                    else if (distance_cm < 10.0) {
+                        distance_index = 6 + static_cast<ULONG>((distance_cm - 3.0) / 1.0);
+                        if (distance_index > 12) distance_index = 12;
+                    }
+                    else if (distance_cm < 20.0) {
+                        distance_index = 13 + static_cast<ULONG>((distance_cm - 10.0) / 2.0);
+                        if (distance_index > 17) distance_index = 17;
+                    }
+                    else if (distance_cm < 40.0) {
+                        distance_index = 18 + static_cast<ULONG>((distance_cm - 20.0) / 4.0);
+                        if (distance_index > 22) distance_index = 22;
+                    }
+                    else {
+                        distance_index = 22;
+                    }
+
+                    ULONG cell_index = angle_index * ra::DESKTOPSENS_DISTANCE_ZONES + distance_index;
+                    double sensitivity = 1.0;
+                    double acceleration = 1.0;
+                    double rotation_degrees = 0.0;
+
+                    KeAcquireSpinLock(&global.desktop_sens_lock, &old_irql);
+                    sensitivity = global.desktop_sens.sensitivity[angle_index];
+                    acceleration = global.desktop_sens.acceleration[cell_index];
+                    rotation_degrees = global.desktop_sens.rotation_degrees[cell_index];
+                    KeReleaseSpinLock(&global.desktop_sens_lock, old_irql);
+
+                    if (!_finite(sensitivity) || sensitivity < 0.1 || sensitivity > 5.0) sensitivity = 1.0;
+                    if (!_finite(acceleration) || acceleration < 0.1 || acceleration > 5.0) acceleration = 1.0;
+                    if (!_finite(rotation_degrees) || rotation_degrees < -45.0 || rotation_degrees > 45.0) rotation_degrees = 0.0;
+
+                    double multiplier = sensitivity;
+                    if (distance_cm > 3.0) multiplier *= acceleration;
+
+                    double x = static_cast<double>(it->LastX) * multiplier;
+                    double y = static_cast<double>(it->LastY) * multiplier;
+                    if (rotation_degrees != 0.0) {
+                        double radians = rotation_degrees * 3.14159265358979323846 / 180.0;
+                        double c = cos(radians);
+                        double sn = sin(radians);
+                        double rotated_x = x * c - y * sn;
+                        double rotated_y = x * sn + y * c;
+                        x = rotated_x;
+                        y = rotated_y;
+                    }
+
+                    double carried_result_x = x + devExt->desktop_sens_carry.x;
+                    double carried_result_y = y + devExt->desktop_sens_carry.y;
+                    LONG out_x = static_cast<LONG>(carried_result_x);
+                    LONG out_y = static_cast<LONG>(carried_result_y);
+                    double carry_x = carried_result_x - out_x;
+                    double carry_y = carried_result_y - out_y;
+                    if (ValidCarry(carry_x, carry_y)) {
+                        devExt->desktop_sens_carry.x = carry_x;
+                        devExt->desktop_sens_carry.y = carry_y;
+                        it->LastX = out_x;
+                        it->LastY = out_y;
+                    }
                 }
             }
         } while (++it != InputDataEnd);
-
     }
 
     (*(PSERVICE_CALLBACK_ROUTINE)devExt->UpperConnectData.ClassService)(
@@ -301,6 +403,32 @@ Return Value:
             }
         }
         break;
+    case ra::DESKTOPSENS_SET:
+        status = WdfRequestRetrieveInputBuffer(
+            Request,
+            sizeof(ra::desktop_sens_profile),
+            &buffer,
+            &buffer_length
+        );
+        if (NT_SUCCESS(status)) {
+            if (buffer_length != sizeof(ra::desktop_sens_profile)) {
+                status = STATUS_INFO_LENGTH_MISMATCH;
+            }
+            else {
+                auto* profile = static_cast<ra::desktop_sens_profile*>(buffer);
+                if (profile->enabled > 1 ||
+                    (profile->enabled && (!_finite(profile->dpi) || profile->dpi < 100.0 || profile->dpi > 30000.0))) {
+                    status = STATUS_INVALID_PARAMETER;
+                }
+                else {
+                    KIRQL old_irql;
+                    KeAcquireSpinLock(&global.desktop_sens_lock, &old_irql);
+                    RtlCopyMemory(&global.desktop_sens, profile, sizeof(global.desktop_sens));
+                    KeReleaseSpinLock(&global.desktop_sens_lock, old_irql);
+                }
+            }
+        }
+        break;
     case ra::GET_VERSION:
         status = WdfRequestRetrieveOutputBuffer(
             Request,
@@ -361,6 +489,8 @@ RawaccelInit(WDFDRIVER driver)
     LARGE_INTEGER freq;
     KeQueryPerformanceCounter(&freq);
     global.tick_interval = 1e3 / freq.QuadPart;
+    KeInitializeSpinLock(&global.desktop_sens_lock);
+    RtlZeroMemory(&global.desktop_sens, sizeof(global.desktop_sens));
 
     global.initialized = true;
 }
