@@ -3,6 +3,7 @@
 #include "interop-exception.h"
 
 #include <cstring>
+#include <vcclr.h>
 #include <rawaccel-io.hpp>
 #include <rawaccel-validate.hpp>
 
