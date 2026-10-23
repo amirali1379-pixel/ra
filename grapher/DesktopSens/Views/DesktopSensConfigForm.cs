@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using System.IO;
 using System.Windows.Forms;
 using grapher.Models.Mouse;
@@ -11,67 +12,155 @@ namespace grapher.DesktopSens.Views
     {
         private readonly AccelGUI _accelGUI;
         private DesktopSensProfile _profile;
+        private readonly TextBox _gameSensBox;
+        private readonly TextBox _dpiBox;
+        private readonly TextBox _pollingRateBox;
+        private readonly Label _profileStatus;
+
+        private string ProfilePath => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "RawAccel", "DesktopSensProfile.json");
 
         public DesktopSensConfigForm(AccelGUI accelGUI)
         {
-            _accelGUI = accelGUI;
-            _profile = new DesktopSensProfile();
+            _accelGUI = accelGUI ?? throw new ArgumentNullException(nameof(accelGUI));
+            _profile = LoadProfile();
 
             Text = "Desktop Sens Calibration";
-            Width = 400;
-            Height = 250;
+            Width = 470;
+            Height = 310;
             StartPosition = FormStartPosition.CenterScreen;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
 
-            var gameSensBox = new TextBox { Left = 120, Top = 20, Width = 150, Text = "2.5" };
-            var dpiBox = new TextBox { Left = 120, Top = 50, Width = 150, Text = "800" };
+            _gameSensBox = new TextBox { Left = 155, Top = 20, Width = 180, Text = _profile.UserInputGameSensitivity.ToString(CultureInfo.InvariantCulture) };
+            _dpiBox = new TextBox { Left = 155, Top = 55, Width = 180, Text = _profile.MouseDPI.ToString(CultureInfo.InvariantCulture) };
+            _pollingRateBox = new TextBox { Left = 155, Top = 90, Width = 180, Text = _profile.PollingRateHz.ToString(CultureInfo.InvariantCulture) };
 
-            var startBtn = new Button { Text = "Start Training", Left = 20, Top = 90, Width = 340, Height = 40 };
-            var saveBtn = new Button { Text = "Save to JSON && Calibrate", Left = 20, Top = 140, Width = 340, Height = 40 };
+            var startBtn = new Button { Text = "Start Training", Left = 20, Top = 130, Width = 410, Height = 40 };
+            var saveBtn = new Button { Text = "Calibrate && Save Profile", Left = 20, Top = 180, Width = 410, Height = 40 };
+            _profileStatus = new Label
+            {
+                Left = 20, Top = 230, Width = 410, Height = 38,
+                Text = "Trials: " + _profile.Trials.Count + " | Profile loads from LocalAppData"
+            };
 
             startBtn.Click += (s, e) =>
             {
-                if (double.TryParse(gameSensBox.Text, out double gs)) _profile.BaseSensitivity = gs;
-                if (int.TryParse(dpiBox.Text, out int dpi)) _profile.MouseDPI = dpi;
-
+                if (!TryReadSettings()) return;
                 using (var trainer = new DesktopSensTrainerForm(_profile))
                 {
                     EventHandler<MouseSample> handler = (sender, sample) => trainer.OnMouseSample(sample);
                     _accelGUI.MouseWatcher.MouseSampleReceived += handler;
-
-                    this.Hide();
-                    trainer.ShowDialog();
-                    this.Show();
-
-                    _accelGUI.MouseWatcher.MouseSampleReceived -= handler;
+                    try
+                    {
+                        Hide();
+                        trainer.ShowDialog();
+                    }
+                    finally
+                    {
+                        Show();
+                        _accelGUI.MouseWatcher.MouseSampleReceived -= handler;
+                    }
                 }
+                _profileStatus.Text = "Trials: " + _profile.Trials.Count + " | Select Calibrate && Save to persist";
             };
 
             saveBtn.Click += (s, e) =>
             {
-                if (_profile.Trials.Count == 0) { MessageBox.Show("No trials."); return; }
-                
-                DesktopSensCalibrator.Calibrate(_profile);
-                
-                // ذخیره‌ی فایل JSON مستقل
-                string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "DesktopSensProfile.json");
-                File.WriteAllText(path, JsonConvert.SerializeObject(_profile, Formatting.Indented));
-                
-                // کپی خودکار به مسیر Raw Accel (برای اعمال تنظیمات)
-                string rawAccelPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "RawAccel");
-                if (Directory.Exists(rawAccelPath))
+                if (!TryReadSettings()) return;
+                if (_profile.Trials.Count == 0)
                 {
-                    File.WriteAllText(Path.Combine(rawAccelPath, "DesktopSensProfile.json"), JsonConvert.SerializeObject(_profile, Formatting.Indented));
+                    MessageBox.Show(this, "No trials to calibrate yet.", "Desktop Sens",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
                 }
 
-                MessageBox.Show($"Saved to:\n{path}\n\nRaw Accel does NOT need to be running.\nProfile saved independently.");
+                try
+                {
+                    DesktopSensCalibrator.Calibrate(_profile);
+                    Directory.CreateDirectory(Path.GetDirectoryName(ProfilePath));
+                    File.WriteAllText(ProfilePath, JsonConvert.SerializeObject(_profile, Formatting.Indented));
+                    _profileStatus.Text = "Saved. Coverage: " + (_profile.OverallCoverage * 100.0).ToString("0.0") +
+                        "% | Trials: " + _profile.Trials.Count;
+                    MessageBox.Show(this,
+                        "Calibration profile saved to:\n" + ProfilePath +
+                        "\n\nNote: saving a profile does not activate a runtime mouse transform. The calibrated factors are currently stored for inspection/use by an integration layer.",
+                        "Desktop Sens", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, "Could not save profile:\n" + ex.Message, "Desktop Sens",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             };
 
-            Controls.Add(new Label { Text = "Game Sens:", Left = 20, Top = 20, Width = 100 });
-            Controls.Add(gameSensBox);
-            Controls.Add(new Label { Text = "Mouse DPI:", Left = 20, Top = 50, Width = 100 });
-            Controls.Add(dpiBox);
+            Controls.Add(new Label { Text = "CS2 Sens:", Left = 20, Top = 23, Width = 120 });
+            Controls.Add(new Label { Text = "Mouse DPI:", Left = 20, Top = 58, Width = 120 });
+            Controls.Add(new Label { Text = "Polling rate (Hz):", Left = 20, Top = 93, Width = 130 });
+            Controls.Add(_gameSensBox);
+            Controls.Add(_dpiBox);
+            Controls.Add(_pollingRateBox);
             Controls.Add(startBtn);
             Controls.Add(saveBtn);
+            Controls.Add(_profileStatus);
+        }
+
+        private bool TryReadSettings()
+        {
+            if (!double.TryParse(_gameSensBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double gameSens) ||
+                double.IsNaN(gameSens) || double.IsInfinity(gameSens) || gameSens <= 0.0)
+            {
+                MessageBox.Show(this, "CS2 sensitivity must be a positive number.", "Invalid settings",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            if (!int.TryParse(_dpiBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int dpi) ||
+                dpi < DesktopSensConstants.MinMouseDPI || dpi > DesktopSensConstants.MaxMouseDPI)
+            {
+                MessageBox.Show(this, "DPI must be between " + DesktopSensConstants.MinMouseDPI + " and " +
+                    DesktopSensConstants.MaxMouseDPI + ".", "Invalid settings",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            if (!double.TryParse(_pollingRateBox.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out double pollingRate) ||
+                double.IsNaN(pollingRate) || double.IsInfinity(pollingRate) ||
+                pollingRate < DesktopSensConstants.MinPollingRateHz || pollingRate > 8000.0)
+            {
+                MessageBox.Show(this, "Polling rate must be between 125 and 8000 Hz.", "Invalid settings",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            _profile.UserInputGameSensitivity = gameSens;
+            _profile.BaseSensitivity = gameSens;
+            _profile.MouseDPI = dpi;
+            _profile.PollingRateHz = pollingRate;
+            return true;
+        }
+
+        private DesktopSensProfile LoadProfile()
+        {
+            try
+            {
+                if (File.Exists(ProfilePath))
+                {
+                    var profile = JsonConvert.DeserializeObject<DesktopSensProfile>(File.ReadAllText(ProfilePath));
+                    if (profile != null)
+                    {
+                        if (profile.Trials == null) profile.Trials = new System.Collections.Generic.List<DesktopSensTrial>();
+                        return profile;
+                    }
+                }
+            }
+            catch
+            {
+                // A corrupt/old profile should not prevent the trainer from opening.
+            }
+            return new DesktopSensProfile();
         }
     }
 }
