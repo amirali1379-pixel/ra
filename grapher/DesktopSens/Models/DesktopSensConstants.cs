@@ -48,8 +48,8 @@
         public const double TargetPollingRateHz = 1000;
 
         // Schema
-        public const int CurrentSchemaVersion = 1;
-        public const int CurrentModelVersion = 1;
+        public const int CurrentSchemaVersion = 2;
+        public const int CurrentModelVersion = 2;
 
         // Conversion
         public const double InchesToCm = 2.54;
