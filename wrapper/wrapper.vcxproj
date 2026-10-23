@@ -156,12 +156,14 @@ copy /Y "$(TargetDir)Newtonsoft.Json.dll" "$(SolutionDir)signed\Newtonsoft.Json.
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="input.h" />
+    <ClInclude Include="desktopsens_runtime.h" />
     <ClInclude Include="interop-exception.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AssemblyInfo.cpp" />
     <ClCompile Include="input.cpp" />
+    <ClCompile Include="desktopsens_runtime.cpp" />
     <ClCompile Include="wrapper.cpp" />
   </ItemGroup>
   <ItemGroup>
