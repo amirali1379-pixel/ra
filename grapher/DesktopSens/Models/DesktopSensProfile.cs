@@ -5,8 +5,8 @@ namespace grapher.DesktopSens.Models
 {
     public class DesktopSensProfile
     {
-        public int SchemaVersion = 2;
-        public int ModelVersion = 2;
+        public int SchemaVersion = DesktopSensConstants.CurrentSchemaVersion;
+        public int ModelVersion = DesktopSensConstants.CurrentModelVersion;
         public string ProfileId = Guid.NewGuid().ToString();
         public DateTime CreatedTimestamp = DateTime.UtcNow;
         public DateTime ModifiedTimestamp = DateTime.UtcNow;
@@ -35,7 +35,13 @@ namespace grapher.DesktopSens.Models
         public double[] CellRotationOffsetDegrees = new double[DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount];
         public double[] CellRotationConfidence = new double[DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount];
 
+        // Legacy global rotation summary retained for older profile consumers.
         public RotationModel Rotation = new RotationModel();
+
+        // Rotation is fitted independently for each distance zone from observations across
+        // the 32 angular axes. Raw per-cell offsets remain available as the primary lookup.
+        public RotationModel[] RotationModelsByDistanceZone =
+            new RotationModel[DesktopSensConstants.DistanceZoneCount];
 
         public int CellsStable = 0;
         public int CellsLowConfidence = 0;
@@ -57,6 +63,14 @@ namespace grapher.DesktopSens.Models
             InitializeFactors(CellSensitivityConfidence, 0.0);
             InitializeFactors(CellAccelerationConfidence, 0.0);
             InitializeFactors(CellRotationConfidence, 0.0);
+            for (int i = 0; i < RotationModelsByDistanceZone.Length; i++)
+            {
+                RotationModelsByDistanceZone[i] = new RotationModel
+                {
+                    Type = RotationModelType.FourierOrder3,
+                    Coefficients = new double[0]
+                };
+            }
         }
 
         public static int GetCellIndex(int angleZoneIndex, int distanceZoneIndex)
