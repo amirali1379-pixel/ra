@@ -31,6 +31,10 @@ namespace grapher.DesktopSens.Models
         public double[] CellAccelerationFactor = new double[DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount];
         public double[] CellAccelerationConfidence = new double[DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount];
 
+        // Signed rotation correction in degrees for each angle/distance cell.
+        public double[] CellRotationOffsetDegrees = new double[DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount];
+        public double[] CellRotationConfidence = new double[DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount];
+
         public RotationModel Rotation = new RotationModel();
 
         public int CellsStable = 0;
@@ -47,10 +51,12 @@ namespace grapher.DesktopSens.Models
             InitializeFactors(AccelerationFactor, 1.0);
             InitializeFactors(CellSensitivityFactor, 1.0);
             InitializeFactors(CellAccelerationFactor, 1.0);
+            InitializeFactors(CellRotationOffsetDegrees, 0.0);
             InitializeFactors(SensitivityConfidence, 0.0);
             InitializeFactors(AccelerationConfidence, 0.0);
             InitializeFactors(CellSensitivityConfidence, 0.0);
             InitializeFactors(CellAccelerationConfidence, 0.0);
+            InitializeFactors(CellRotationConfidence, 0.0);
         }
 
         public static int GetCellIndex(int angleZoneIndex, int distanceZoneIndex)
