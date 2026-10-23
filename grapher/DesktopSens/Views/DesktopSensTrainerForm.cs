@@ -60,14 +60,17 @@ namespace grapher.DesktopSens.Views
 
         public void OnMouseSample(MouseSample sample)
         {
+            // Only the actual mouse-flick phase moves the virtual landing point. Input during
+            // setup/cooldown/ASDW correction must not drift the start or overwrite keyboard training.
+            if (_state != TrialState.Flicking)
+                return;
+
             // Raw input is in device counts. Convert counts -> physical cm -> canvas pixels.
             double scale = _pixelsPerCm * DesktopSensConstants.InchesToCm / _profile.MouseDPI;
             _currentCursorPos.X += (float)(sample.DX * scale);
             _currentCursorPos.Y += (float)(sample.DY * scale);
             ClampCursorToCanvas();
-
-            if (_state == TrialState.Flicking)
-                _rawSamples.Add(sample);
+            _rawSamples.Add(sample);
 
             MoveSystemCursorToCanvas();
             Invalidate();
