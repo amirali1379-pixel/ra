@@ -1,6 +1,7 @@
 #pragma once
 
 #include "interop-exception.h"
+#include "desktopsens_runtime.h"
 
 #include <rawaccel-io.hpp>
 #include <rawaccel-validate.hpp>
@@ -914,3 +915,70 @@ private:
     DriverConfig() {}
 };
 
+
+/// <summary>
+/// Narrow managed entry point for the standalone DesktopSens processor.
+/// The caller must provide the one canonical input stream and consume the returned delta
+/// in the existing supported output path; this class does not create a second input hook.
+/// </summary>
+public ref class DesktopSensRuntimeBridge
+{
+private:
+    desktop_sens::runtime* const instance = new desktop_sens::runtime();
+
+public:
+    virtual ~DesktopSensRuntimeBridge()
+    {
+        delete instance;
+    }
+
+    !DesktopSensRuntimeBridge()
+    {
+        delete instance;
+    }
+
+    // Returns (processedDx, processedDy, activeAxis, distanceZone, strokeDistanceCm).
+    // Factors use angle-major cell indexing: axis * 23 + distanceZone.
+    Tuple<double, double, int, int, double>^ Process(
+        array<double>^ sensitivity,
+        array<double>^ acceleration,
+        array<double>^ rotationDegrees,
+        int dx, int dy, int dpi, double elapsedMs)
+    {
+        if (sensitivity == nullptr || sensitivity->Length < desktop_sens::AngularZoneCount)
+            throw gcnew ArgumentException("Sensitivity must contain 32 axis factors.", "sensitivity");
+        if (acceleration == nullptr || acceleration->Length < desktop_sens::CellCount)
+            throw gcnew ArgumentException("Acceleration must contain 32 x 23 cell factors.", "acceleration");
+        if (rotationDegrees == nullptr || rotationDegrees->Length < desktop_sens::CellCount)
+            throw gcnew ArgumentException("Rotation must contain 32 x 23 cell corrections.", "rotationDegrees");
+        if (dpi <= 0)
+            throw gcnew ArgumentOutOfRangeException("dpi");
+
+        std::array<double, desktop_sens::AngularZoneCount> sensitivityCopy{};
+        std::array<double, desktop_sens::CellCount> accelerationCopy{};
+        std::array<double, desktop_sens::CellCount> rotationCopy{};
+
+        for (int i = 0; i < static_cast<int>(sensitivityCopy.size()); ++i)
+            sensitivityCopy[i] = sensitivity[i];
+        for (int i = 0; i < static_cast<int>(accelerationCopy.size()); ++i)
+        {
+            accelerationCopy[i] = acceleration[i];
+            rotationCopy[i] = rotationDegrees[i];
+        }
+
+        desktop_sens::profile_view profile{
+            sensitivityCopy.data(),
+            accelerationCopy.data(),
+            rotationCopy.data()
+        };
+        const auto result = instance->process(dx, dy, dpi, elapsedMs, profile);
+        return gcnew Tuple<double, double, int, int, double>(
+            result.dx, result.dy, result.active_axis,
+            result.distance_zone, result.stroke_distance_cm);
+    }
+
+    void Reset()
+    {
+        instance->reset();
+    }
+};
