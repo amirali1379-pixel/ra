@@ -27,6 +27,12 @@ typedef struct _DEVICE_EXTENSION {
     ra::time_clamp clamp;
     ra::modifier mod;
     vec2d carry;
+    // DesktopSens is applied in the existing class-service callback, not via a
+    // second user-mode mouse injection path.
+    vec2d desktop_sens_carry;
+    double desktop_sens_stroke_x;
+    double desktop_sens_stroke_y;
+    counter_t desktop_sens_last_counter;
     CONNECT_DATA UpperConnectData;
     ra::modifier_settings mod_settings;
     ra::speed_processor speed_processor;
