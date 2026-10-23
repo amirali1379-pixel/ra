@@ -1,0 +1,12 @@
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\grapher\obj\x64\Release\grapher.csproj.AssemblyReference.cache
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\grapher\obj\x64\Release\grapher.AboutBox.resources
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\grapher\obj\x64\Release\grapher.RawAcceleration.resources
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\grapher\obj\x64\Release\grapher.Properties.Resources.resources
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\grapher\obj\x64\Release\grapher.csproj.GenerateResource.cache
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\grapher\obj\x64\Release\grapher.csproj.CoreCompileInputs.cache
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\x64\Release\rawaccel.exe.config
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\x64\Release\rawaccel.exe
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\x64\Release\rawaccel.pdb
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\grapher\obj\x64\Release\grapher.csproj.Up2Date
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\grapher\obj\x64\Release\rawaccel.exe
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\grapher\obj\x64\Release\rawaccel.pdb
