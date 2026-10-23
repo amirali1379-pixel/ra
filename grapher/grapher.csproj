@@ -218,6 +218,7 @@
     </Compile>
     <Compile Include="DesktopSens\Models\DesktopSensConstants.cs" />
 	<Compile Include="DesktopSens\Models\DesktopSensCalibrator.cs" />
+    <Compile Include="DesktopSens\Models\DesktopSensRotationModelFitter.cs" />
     <Compile Include="DesktopSens\Models\ZoneCalculations.cs" />
     <Compile Include="DesktopSens\Models\RotationModel.cs" />
     <Compile Include="DesktopSens\Models\DesktopSensTrial.cs" />
