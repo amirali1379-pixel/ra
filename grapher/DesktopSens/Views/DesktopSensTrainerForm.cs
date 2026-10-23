@@ -60,6 +60,14 @@ namespace grapher.DesktopSens.Views
 
         public void OnMouseSample(MouseSample sample)
         {
+            // Keep mouse tracking enabled while placing the setup points. Freeze the virtual
+            // cursor during cooldown and keyboard correction so those phases cannot contaminate
+            // the raw flick measurement.
+            if (_state == TrialState.Cooldown ||
+                _state == TrialState.ASDWAdjusting ||
+                _state == TrialState.TrialComplete)
+                return;
+
             // Raw input is in device counts. Convert counts -> physical cm -> canvas pixels.
             double scale = _pixelsPerCm * DesktopSensConstants.InchesToCm / _profile.MouseDPI;
             _currentCursorPos.X += (float)(sample.DX * scale);
@@ -202,6 +210,8 @@ namespace grapher.DesktopSens.Views
                 IsOverFlick = signedErrorCm > 0.0,
                 FlickAngleDegrees = flickAngle,
                 SignedRotationErrorDegrees = NormalizeSignedAngle(targetAngle - flickAngle),
+                HasMovementMeasurement = actualDistancePx >= 0.25 * _pixelsPerCm,
+                HasRotationMeasurement = actualDistancePx >= 0.25 * _pixelsPerCm,
                 FlickDistanceCm = flickDistanceCm,
                 DurationMs = _trialStopwatch.Elapsed.TotalMilliseconds,
                 PeakVelocityPxPerSec = peakVelocity,

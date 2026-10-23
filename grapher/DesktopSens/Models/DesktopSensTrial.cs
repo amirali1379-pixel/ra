@@ -36,6 +36,10 @@ namespace grapher.DesktopSens.Models
         public double FlickAngleDegrees;
         // Signed shortest angular correction: target angle minus measured flick angle.
         public double SignedRotationErrorDegrees;
+        // Defaults preserve legacy JSON trials: old records remain movement observations,
+        // but rotation is only trusted when explicitly measured by the current trainer.
+        public bool HasMovementMeasurement = true;
+        public bool HasRotationMeasurement;
         public double FlickDistanceCm;
         public double DurationMs;
         public double PeakVelocityPxPerSec;
