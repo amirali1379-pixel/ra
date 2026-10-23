@@ -121,12 +121,16 @@ namespace grapher.DesktopSens.Models
                 else
                 {
                     // Preserve the first 3 cm as the base-sensitivity region. Only the excess
-                    // distance contributes to the acceleration correction.
+                    // distance contributes to acceleration. If the raw flick never reaches 3 cm,
+                    // acceleration cannot explain/correct that result, so leave this cell untrained.
                     double desiredExcess = targetCm - BaseZoneEndCm;
                     double observedExcess = observedCm - BaseZoneEndCm;
-                    factor = SafeRatio(desiredExcess, observedExcess);
-                    profile.CellAccelerationFactor[cellIndex] = Clamp(factor, MinimumFactor, MaximumFactor);
-                    profile.CellAccelerationConfidence[cellIndex] = Confidence(zone.SignedErrors.Count);
+                    if (observedExcess > MinimumDenominatorCm)
+                    {
+                        factor = SafeRatio(desiredExcess, observedExcess);
+                        profile.CellAccelerationFactor[cellIndex] = Clamp(factor, MinimumFactor, MaximumFactor);
+                        profile.CellAccelerationConfidence[cellIndex] = Confidence(zone.SignedErrors.Count);
+                    }
                 }
 
                 // Only observations for the relevant correction dimension contribute to legacy summaries.
@@ -135,7 +139,8 @@ namespace grapher.DesktopSens.Models
                     angleErrorTotals[zone.AngleZoneIndex] += profile.CellSensitivityFactor[cellIndex] * zone.SignedErrors.Count;
                     angleCounts[zone.AngleZoneIndex] += zone.SignedErrors.Count;
                 }
-                else
+                else if (observedCm - BaseZoneEndCm > MinimumDenominatorCm &&
+                    profile.CellAccelerationConfidence[cellIndex] > 0.0)
                 {
                     distanceFactorTotals[zone.DistanceZoneIndex] += profile.CellAccelerationFactor[cellIndex] * zone.SignedErrors.Count;
                     distanceCounts[zone.DistanceZoneIndex] += zone.SignedErrors.Count;
