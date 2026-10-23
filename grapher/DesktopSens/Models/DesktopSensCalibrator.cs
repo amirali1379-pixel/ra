@@ -106,6 +106,16 @@ namespace grapher.DesktopSens.Models
                     zone.RotationErrors.Add(trial.SignedRotationErrorDegrees);
             }
 
+            // A malformed/non-finite trial can create a cell before its error is rejected.
+            // Remove empty cells before averaging so calibration cannot throw on Average().
+            foreach (int emptyCell in cells
+                .Where(pair => pair.Value.SignedErrors.Count == 0 || pair.Value.TargetDistances.Count == 0)
+                .Select(pair => pair.Key)
+                .ToList())
+            {
+                cells.Remove(emptyCell);
+            }
+
             var angleErrorTotals = new double[DesktopSensConstants.AngularZoneCount];
             var angleCounts = new int[DesktopSensConstants.AngularZoneCount];
             var distanceFactorTotals = new double[DesktopSensConstants.DistanceZoneCount];
