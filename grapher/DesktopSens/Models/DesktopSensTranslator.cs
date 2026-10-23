@@ -26,6 +26,23 @@ namespace grapher.DesktopSens.Models
             return baseFactor * accelerationFactor;
         }
 
+        public static double GetRotationCorrectionDegrees(DesktopSensProfile profile, double angleDegrees, double distanceCm)
+        {
+            if (profile == null) throw new ArgumentNullException(nameof(profile));
+            if (distanceCm < 0.0 || double.IsNaN(distanceCm) || double.IsInfinity(distanceCm))
+                throw new ArgumentOutOfRangeException(nameof(distanceCm));
+
+            int angleIndex = ZoneCalculations.AngleToZoneIndex(angleDegrees);
+            int distanceIndex = ZoneCalculations.DistanceToZoneIndex(distanceCm);
+            int cellIndex = DesktopSensProfile.GetCellIndex(angleIndex, distanceIndex);
+            if (profile.CellRotationOffsetDegrees == null ||
+                cellIndex >= profile.CellRotationOffsetDegrees.Length)
+                return 0.0;
+
+            double correction = profile.CellRotationOffsetDegrees[cellIndex];
+            return double.IsNaN(correction) || double.IsInfinity(correction) ? 0.0 : correction;
+        }
+
         private static double ReadFactor(double[] values, int index, double fallback)
         {
             if (values == null || index < 0 || index >= values.Length)
