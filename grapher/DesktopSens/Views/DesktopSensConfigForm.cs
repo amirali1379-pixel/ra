@@ -80,13 +80,17 @@ namespace grapher.DesktopSens.Views
                 try
                 {
                     DesktopSensCalibrator.Calibrate(_profile);
+                    int rotationFits = CountUsableRotationModels(_profile);
                     Directory.CreateDirectory(Path.GetDirectoryName(ProfilePath));
                     File.WriteAllText(ProfilePath, JsonConvert.SerializeObject(_profile, Formatting.Indented));
                     _profileStatus.Text = "Saved. Coverage: " + (_profile.OverallCoverage * 100.0).ToString("0.0") +
-                        "% | Trials: " + _profile.Trials.Count;
+                        "% | Rotation fits: " + rotationFits + "/" + DesktopSensConstants.DistanceZoneCount +
+                        " | Trials: " + _profile.Trials.Count;
                     MessageBox.Show(this,
                         "Calibration profile saved to:\n" + ProfilePath +
-                        "\n\nNote: saving a profile does not activate a runtime mouse transform. The calibrated factors are currently stored for inspection/use by an integration layer.",
+                        "\n\nRotation models passing quality limits: " + rotationFits + "/" +
+                        DesktopSensConstants.DistanceZoneCount +
+                        "\n\nNote: saving a profile does not activate a runtime mouse transform. The calibrated factors are stored for offline inspection and preview; no Driver changes or live input transformation are performed.",
                         "Desktop Sens", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
@@ -140,6 +144,15 @@ namespace grapher.DesktopSens.Views
             _profile.MouseDPI = dpi;
             _profile.PollingRateHz = pollingRate;
             return true;
+        }
+
+        private static int CountUsableRotationModels(DesktopSensProfile profile)
+        {
+            if (profile == null || profile.RotationModelsByDistanceZone == null) return 0;
+            int count = 0;
+            foreach (RotationModel model in profile.RotationModelsByDistanceZone)
+                if (DesktopSensRotationModelFitter.IsUsable(model)) count++;
+            return count;
         }
 
         private DesktopSensProfile LoadProfile()
