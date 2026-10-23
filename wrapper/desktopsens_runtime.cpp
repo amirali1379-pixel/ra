@@ -61,9 +61,7 @@ namespace desktop_sens
 
     void runtime::reset() noexcept
     {
-        stroke_distance_cm_ = 0.0;
-        previous_axis_ = -1;
-        idle_ms_ = 0.0;
+        axis_distance_cm_.fill(0.0);
     }
 
     process_result runtime::process(
@@ -76,9 +74,8 @@ namespace desktop_sens
             profile.acceleration == nullptr ||
             profile.rotation_degrees == nullptr)
         {
-            idle_ms_ += std::max(0.0, finite_or(elapsed_ms, 0.0));
-            if (idle_ms_ >= StrokeResetIdleMs) reset();
-            result.stroke_distance_cm = stroke_distance_cm_;
+            if (std::max(0.0, finite_or(elapsed_ms, 0.0)) >= StrokeResetIdleMs) reset();
+            result.stroke_distance_cm = 0.0;
             return result;
         }
 
@@ -88,20 +85,18 @@ namespace desktop_sens
             static_cast<double>(dpi) * InchesToCm;
         const double dt = std::max(0.0, finite_or(elapsed_ms, 0.0));
 
-        // A new direction zone starts a new stroke, so one active axis owns each move.
-        // An idle gap also resets distance without depending on RawAccel being enabled.
-        if (axis != previous_axis_ || idle_ms_ >= StrokeResetIdleMs)
-            stroke_distance_cm_ = 0.0;
-        stroke_distance_cm_ += step_cm;
-        previous_axis_ = axis;
-        idle_ms_ = 0.0;
-
-        const int distance_zone = distance_to_zone(stroke_distance_cm_);
+        // Only the currently selected direction axis is processed for this event.
+        // Each axis retains its own distance accumulator; a brief turn does not erase
+        // acceleration progress for the other axes. Long gaps reset all stroke state.
+        if (dt >= StrokeResetIdleMs) reset();
+        axis_distance_cm_[static_cast<std::size_t>(axis)] += step_cm;
+        const double stroke_distance_cm = axis_distance_cm_[static_cast<std::size_t>(axis)];
+        const int distance_zone = distance_to_zone(stroke_distance_cm);
         const std::size_t cell = static_cast<std::size_t>(axis) * DistanceZoneCount +
             static_cast<std::size_t>(distance_zone);
 
         const double base = finite_positive_or(profile.sensitivity[axis], 1.0);
-        const double accel = stroke_distance_cm_ <= MicroZoneMaxCm
+        const double accel = stroke_distance_cm <= MicroZoneMaxCm
             ? 1.0
             : finite_positive_or(profile.acceleration[cell], 1.0);
         const double rotation = normalize_signed_degrees(finite_or(profile.rotation_degrees[cell], 0.0));
@@ -116,7 +111,7 @@ namespace desktop_sens
         result.dy = rotated_y * scale;
         result.active_axis = axis;
         result.distance_zone = distance_zone;
-        result.stroke_distance_cm = stroke_distance_cm_;
+        result.stroke_distance_cm = stroke_distance_cm;
         return result;
     }
 }
