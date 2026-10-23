@@ -18,10 +18,12 @@ namespace grapher.DesktopSens.Models
             int distanceIndex = ZoneCalculations.DistanceToZoneIndex(distanceCm);
             int cellIndex = DesktopSensProfile.GetCellIndex(angleIndex, distanceIndex);
 
+            // Sensitivity is per axis (32 angular zones). It remains the base multiplier at
+            // every distance; acceleration is added only after the first 3 cm.
+            double baseFactor = ReadFactor(profile.SensitivityFactor, angleIndex, 1.0);
             if (distanceCm <= DesktopSensConstants.MicroZoneMaxCm)
-                return ReadFactor(profile.CellSensitivityFactor, cellIndex, 1.0);
+                return baseFactor;
 
-            double baseFactor = ReadFactor(profile.CellSensitivityFactor, cellIndex, 1.0);
             double accelerationFactor = ReadFactor(profile.CellAccelerationFactor, cellIndex, 1.0);
             return baseFactor * accelerationFactor;
         }
