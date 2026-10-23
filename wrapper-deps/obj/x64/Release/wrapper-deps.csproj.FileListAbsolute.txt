@@ -1,0 +1,9 @@
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\wrapper-deps\bin\x64\Release\wrapper-deps.dll
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\wrapper-deps\bin\x64\Release\wrapper-deps.pdb
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\wrapper-deps\obj\x64\Release\wrapper-deps.csproj.AssemblyReference.cache
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\wrapper-deps\obj\x64\Release\wrapper-deps.csproj.CoreCompileInputs.cache
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\wrapper-deps\obj\x64\Release\wrapper-deps.dll
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\wrapper-deps\obj\x64\Release\wrapper-deps.pdb
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\wrapper-deps\bin\x64\Release\Newtonsoft.Json.dll
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\wrapper-deps\bin\x64\Release\Newtonsoft.Json.xml
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\wrapper-deps\obj\x64\Release\wrapper-.9C7F10AE.Up2Date

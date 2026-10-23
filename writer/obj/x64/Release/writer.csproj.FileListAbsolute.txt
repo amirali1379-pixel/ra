@@ -1,0 +1,9 @@
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\x64\Release\writer.exe.config
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\x64\Release\writer.exe
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\x64\Release\writer.pdb
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\writer\obj\x64\Release\writer.csproj.AssemblyReference.cache
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\writer\obj\x64\Release\writer.csproj.CoreCompileInputs.cache
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\writer\obj\x64\Release\writer.csproj.Up2Date
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\writer\obj\x64\Release\writer.exe
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\writer\obj\x64\Release\writer.pdb
+C:\Users\Mo\Desktop\mew ra\rawaccel-1.7.1\writer\obj\x64\Release\writer.exe.config
