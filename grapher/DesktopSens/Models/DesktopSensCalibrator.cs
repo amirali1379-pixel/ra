@@ -8,161 +8,207 @@ namespace grapher.DesktopSens.Models
     {
         public int AngleZoneIndex;
         public int DistanceZoneIndex;
-        public List<double> Errors = new List<double>();
-        public List<double> Distances = new List<double>();
-        
-        public double MeanError => Errors.Count > 0 ? Errors.Average() : 0;
-        public double Variance => Errors.Count > 1 ? Errors.Select(e => Math.Pow(e - MeanError, 2)).Average() : 0;
-        
-        public double GetSensitivityFactor()
-        {
-            if (Errors.Count == 0) return 1.0;
-            double factor = 1.0 - (MeanError * 0.1);
-            if (Distances.Average() > 3.0 && factor > 1.0) factor = 1.0;
-            return Math.Max(0.5, Math.Min(2.0, factor));
-        }
+        public List<double> SignedErrors = new List<double>();
+        public List<double> TargetDistances = new List<double>();
+        public List<double> RotationErrors = new List<double>();
 
-        public double GetAccelerationFactor()
+        public double MeanError => SignedErrors.Count > 0 ? SignedErrors.Average() : 0.0;
+        public double MeanRotationError
         {
-            if (Errors.Count == 0) return 1.0;
-            double avgDist = Distances.Average();
-            if (avgDist < 3.0) return 1.0;
-            double factor = 1.0 + (MeanError * 0.15);
-            return Math.Max(0.5, Math.Min(2.0, factor));
+            get
+            {
+                if (RotationErrors.Count == 0) return 0.0;
+                double sin = 0.0;
+                double cos = 0.0;
+                foreach (double angle in RotationErrors)
+                {
+                    double radians = angle * Math.PI / 180.0;
+                    sin += Math.Sin(radians);
+                    cos += Math.Cos(radians);
+                }
+                return Math.Atan2(sin, cos) * 180.0 / Math.PI;
+            }
         }
+        public double Variance => SignedErrors.Count > 1
+            ? SignedErrors.Select(e => Math.Pow(e - MeanError, 2)).Average()
+            : 0.0;
     }
 
     public static class DesktopSensCalibrator
     {
+        private const double MinimumDenominatorCm = 0.05;
+        private const double MinimumFactor = 0.5;
+        private const double MaximumFactor = 2.0;
+        private const double BaseZoneEndCm = 3.0;
+
         public static void Calibrate(DesktopSensProfile profile)
         {
-            var zones = new Dictionary<Tuple<int, int>, ZoneData>();
-            
+            if (profile == null) throw new ArgumentNullException(nameof(profile));
+            if (profile.Trials == null) profile.Trials = new List<DesktopSensTrial>();
+
+            EnsureArray(ref profile.CellSensitivityFactor, DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount, 1.0);
+            EnsureArray(ref profile.CellSensitivityConfidence, DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount, 0.0);
+            EnsureArray(ref profile.CellAccelerationFactor, DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount, 1.0);
+            EnsureArray(ref profile.CellAccelerationConfidence, DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount, 0.0);
+            EnsureArray(ref profile.CellRotationOffsetDegrees, DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount, 0.0);
+            EnsureArray(ref profile.CellRotationConfidence, DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount, 0.0);
+            EnsureArray(ref profile.SensitivityFactor, DesktopSensConstants.AngularZoneCount, 1.0);
+            EnsureArray(ref profile.SensitivityConfidence, DesktopSensConstants.AngularZoneCount, 0.0);
+            EnsureArray(ref profile.AccelerationFactor, DesktopSensConstants.DistanceZoneCount, 1.0);
+            EnsureArray(ref profile.AccelerationConfidence, DesktopSensConstants.DistanceZoneCount, 0.0);
+
+            var cells = new Dictionary<int, ZoneData>();
             foreach (var trial in profile.Trials)
             {
-                var key = new Tuple<int, int>(trial.AngleZoneIndex, trial.DistanceZoneIndex);
-                if (!zones.ContainsKey(key))
-                    zones[key] = new ZoneData { AngleZoneIndex = key.Item1, DistanceZoneIndex = key.Item2 };
-                
-                double error = trial.IsUnderFlick ? -trial.FinalErrorCm : trial.FinalErrorCm;
-                zones[key].Errors.Add(error);
-                zones[key].Distances.Add(trial.TargetDistanceCm);
+                if (trial == null ||
+                    trial.AngleZoneIndex < 0 || trial.AngleZoneIndex >= DesktopSensConstants.AngularZoneCount ||
+                    trial.DistanceZoneIndex < 0 || trial.DistanceZoneIndex >= DesktopSensConstants.DistanceZoneCount ||
+                    trial.TargetDistanceCm <= 0.0)
+                    continue;
+
+                int cellIndex = DesktopSensProfile.GetCellIndex(trial.AngleZoneIndex, trial.DistanceZoneIndex);
+                if (!cells.TryGetValue(cellIndex, out ZoneData zone))
+                {
+                    zone = new ZoneData
+                    {
+                        AngleZoneIndex = trial.AngleZoneIndex,
+                        DistanceZoneIndex = trial.DistanceZoneIndex
+                    };
+                    cells.Add(cellIndex, zone);
+                }
+
+                // Legacy trials have no projection measurement. Only use the legacy fallback
+                // when ProjectedDistanceCm is also absent; a new trial can have zero along-axis
+                // error but a non-zero lateral landing error.
+                double signedError = trial.SignedErrorCm;
+                if (Math.Abs(signedError) < 0.000001 &&
+                    Math.Abs(trial.ProjectedDistanceCm) < 0.000001 &&
+                    trial.FinalErrorCm > 0.0)
+                    signedError = trial.IsUnderFlick ? -trial.FinalErrorCm : trial.FinalErrorCm;
+
+                if (!IsFinite(signedError)) continue;
+                zone.SignedErrors.Add(signedError);
+                zone.TargetDistances.Add(trial.TargetDistanceCm);
+                if (IsFinite(trial.SignedRotationErrorDegrees))
+                    zone.RotationErrors.Add(trial.SignedRotationErrorDegrees);
             }
 
-            foreach (var kvp in zones)
+            var angleErrorTotals = new double[DesktopSensConstants.AngularZoneCount];
+            var angleCounts = new int[DesktopSensConstants.AngularZoneCount];
+            var distanceFactorTotals = new double[DesktopSensConstants.DistanceZoneCount];
+            var distanceCounts = new int[DesktopSensConstants.DistanceZoneCount];
+
+            foreach (var pair in cells)
             {
-                var zone = kvp.Value;
-                profile.SensitivityFactor[zone.AngleZoneIndex] = zone.GetSensitivityFactor();
-                profile.AccelerationFactor[zone.DistanceZoneIndex] = zone.GetAccelerationFactor();
-                profile.SensitivityConfidence[zone.AngleZoneIndex] = Math.Min(1.0, zone.Errors.Count / 10.0);
-                profile.AccelerationConfidence[zone.DistanceZoneIndex] = Math.Min(1.0, zone.Errors.Count / 10.0);
+                int cellIndex = pair.Key;
+                ZoneData zone = pair.Value;
+                double targetCm = zone.TargetDistances.Average();
+                double signedErrorCm = zone.MeanError;
+                if (zone.RotationErrors.Count > 0)
+                {
+                    profile.CellRotationOffsetDegrees[cellIndex] = zone.MeanRotationError;
+                    profile.CellRotationConfidence[cellIndex] = Confidence(zone.RotationErrors.Count);
+                }
+                double observedCm = targetCm + signedErrorCm;
+                double factor;
+
+                if (targetCm <= BaseZoneEndCm)
+                {
+                    factor = SafeRatio(targetCm, observedCm);
+                    profile.CellSensitivityFactor[cellIndex] = Clamp(factor, MinimumFactor, MaximumFactor);
+                    profile.CellSensitivityConfidence[cellIndex] = Confidence(zone.SignedErrors.Count);
+                }
+                else
+                {
+                    // Preserve the first 3 cm as the base-sensitivity region. Only the excess
+                    // distance contributes to acceleration. If the raw flick never reaches 3 cm,
+                    // acceleration cannot explain/correct that result, so leave this cell untrained.
+                    double desiredExcess = targetCm - BaseZoneEndCm;
+                    double observedExcess = observedCm - BaseZoneEndCm;
+                    if (observedExcess > MinimumDenominatorCm)
+                    {
+                        factor = SafeRatio(desiredExcess, observedExcess);
+                        profile.CellAccelerationFactor[cellIndex] = Clamp(factor, MinimumFactor, MaximumFactor);
+                        profile.CellAccelerationConfidence[cellIndex] = Confidence(zone.SignedErrors.Count);
+                    }
+                }
+
+                // Only observations for the relevant correction dimension contribute to legacy summaries.
+                if (targetCm <= BaseZoneEndCm)
+                {
+                    angleErrorTotals[zone.AngleZoneIndex] += profile.CellSensitivityFactor[cellIndex] * zone.SignedErrors.Count;
+                    angleCounts[zone.AngleZoneIndex] += zone.SignedErrors.Count;
+                }
+                else if (observedCm - BaseZoneEndCm > MinimumDenominatorCm &&
+                    profile.CellAccelerationConfidence[cellIndex] > 0.0)
+                {
+                    distanceFactorTotals[zone.DistanceZoneIndex] += profile.CellAccelerationFactor[cellIndex] * zone.SignedErrors.Count;
+                    distanceCounts[zone.DistanceZoneIndex] += zone.SignedErrors.Count;
+                }
             }
 
-            var rotationData = new List<Tuple<double, double>>();
-            foreach (var trial in profile.Trials)
+            for (int angle = 0; angle < DesktopSensConstants.AngularZoneCount; angle++)
             {
-                double angleError = trial.FlickAngleDegrees - trial.TargetAngleDegrees;
-                while (angleError > 180) angleError -= 360;
-                while (angleError < -180) angleError += 360;
-                rotationData.Add(new Tuple<double, double>(trial.TargetAngleDegrees, angleError));
+                if (angleCounts[angle] > 0)
+                {
+                    profile.SensitivityFactor[angle] = angleErrorTotals[angle] / angleCounts[angle];
+                    profile.SensitivityConfidence[angle] = Confidence(angleCounts[angle]);
+                }
             }
 
-            if (rotationData.Count >= 5)
+            for (int distance = 0; distance < DesktopSensConstants.DistanceZoneCount; distance++)
             {
-                profile.Rotation = FitFourier(rotationData, 3);
+                if (distanceCounts[distance] > 0)
+                {
+                    profile.AccelerationFactor[distance] = distanceFactorTotals[distance] / distanceCounts[distance];
+                    profile.AccelerationConfidence[distance] = Confidence(distanceCounts[distance]);
+                }
+            }
+
+            int populatedCells = cells.Count;
+            profile.CellsInsufficientData = DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount - populatedCells;
+            profile.CellsStable = cells.Count(p => p.Value.SignedErrors.Count >= 10);
+            profile.CellsLowConfidence = populatedCells - profile.CellsStable;
+            profile.OverallCoverage = (double)populatedCells /
+                (DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount);
+            profile.OverallConfidence = cells.Count == 0 ? 0.0 :
+                cells.Values.Average(c => Confidence(c.SignedErrors.Count));
+            profile.ModifiedTimestamp = DateTime.UtcNow;
+        }
+
+        private static void EnsureArray(ref double[] values, int length, double defaultValue)
+        {
+            if (values == null || values.Length != length)
+            {
+                var replacement = new double[length];
+                for (int i = 0; i < replacement.Length; i++) replacement[i] = defaultValue;
+                if (values != null)
+                    Array.Copy(values, replacement, Math.Min(values.Length, replacement.Length));
+                values = replacement;
             }
         }
 
-        private static RotationModel FitFourier(List<Tuple<double, double>> data, int order)
+        private static double SafeRatio(double numerator, double denominator)
         {
-            int n = data.Count;
-            int paramCount = 1 + 2 * order;
-            var matrix = new double[n, paramCount];
-            var vector = new double[n];
-
-            for (int i = 0; i < n; i++)
-            {
-                double theta = data[i].Item1 * Math.PI / 180.0;
-                matrix[i, 0] = 1;
-                for (int k = 1; k <= order; k++)
-                {
-                    matrix[i, 2 * k - 1] = Math.Cos(k * theta);
-                    matrix[i, 2 * k] = Math.Sin(k * theta);
-                }
-                vector[i] = data[i].Item2;
-            }
-
-            var coefficients = LeastSquares(matrix, vector);
-            return new RotationModel
-            {
-                Type = order == 2 ? RotationModelType.FourierOrder2 : RotationModelType.FourierOrder3,
-                Coefficients = coefficients,
-                SampleCount = n
-            };
+            if (Math.Abs(denominator) < MinimumDenominatorCm)
+                denominator = denominator < 0 ? -MinimumDenominatorCm : MinimumDenominatorCm;
+            return numerator / denominator;
         }
 
-        private static double[] LeastSquares(double[,] A, double[] b)
+        private static double Confidence(int sampleCount)
         {
-            int rows = A.GetLength(0);
-            int cols = A.GetLength(1);
-            var AtA = new double[cols, cols];
-            var Atb = new double[cols];
-
-            for (int i = 0; i < cols; i++)
-            {
-                for (int j = 0; j < cols; j++)
-                {
-                    double sum = 0;
-                    for (int k = 0; k < rows; k++) sum += A[k, i] * A[k, j];
-                    AtA[i, j] = sum;
-                }
-                double sumB = 0;
-                for (int k = 0; k < rows; k++) sumB += A[k, i] * b[k];
-                Atb[i] = sumB;
-            }
-
-            return SolveLinear(AtA, Atb);
+            return Math.Min(1.0, sampleCount / 10.0);
         }
 
-        private static double[] SolveLinear(double[,] A, double[] b)
+        private static double Clamp(double value, double minimum, double maximum)
         {
-            int n = b.Length;
-            var M = new double[n, n + 1];
-            for (int i = 0; i < n; i++)
-            {
-                for (int j = 0; j < n; j++) M[i, j] = A[i, j];
-                M[i, n] = b[i];
-            }
+            if (!IsFinite(value)) return 1.0;
+            return Math.Max(minimum, Math.Min(maximum, value));
+        }
 
-            for (int i = 0; i < n; i++)
-            {
-                int pivot = i;
-                for (int j = i + 1; j < n; j++)
-                    if (Math.Abs(M[j, i]) > Math.Abs(M[pivot, i])) pivot = j;
-
-                for (int j = 0; j <= n; j++)
-                {
-                    double tmp = M[i, j];
-                    M[i, j] = M[pivot, j];
-                    M[pivot, j] = tmp;
-                }
-
-                for (int j = i + 1; j < n; j++)
-                {
-                    double factor = M[j, i] / M[i, i];
-                    for (int k = i; k <= n; k++)
-                        M[j, k] -= factor * M[i, k];
-                }
-            }
-
-            var result = new double[n];
-            for (int i = n - 1; i >= 0; i--)
-            {
-                double sum = M[i, n];
-                for (int j = i + 1; j < n; j++) sum -= M[i, j] * result[j];
-                result[i] = sum / M[i, i];
-            }
-            return result;
+        private static bool IsFinite(double value)
+        {
+            return !double.IsNaN(value) && !double.IsInfinity(value);
         }
     }
 }

@@ -27,10 +27,15 @@ namespace grapher.DesktopSens.Models
         public double LandedX;
         public double LandedY;
         public double FinalErrorCm;
+        // Signed error along the target direction: negative = short, positive = past target.
+        public double SignedErrorCm;
+        public double ProjectedDistanceCm;
         public bool IsUnderFlick;
         public bool IsOverFlick;
 
         public double FlickAngleDegrees;
+        // Signed shortest angular correction: target angle minus measured flick angle.
+        public double SignedRotationErrorDegrees;
         public double FlickDistanceCm;
         public double DurationMs;
         public double PeakVelocityPxPerSec;
@@ -43,5 +48,6 @@ namespace grapher.DesktopSens.Models
 
         public int MouseDPI;
         public double EffectivePollingRateHz;
+        public double CanvasPixelsPerCm;
     }
 }
