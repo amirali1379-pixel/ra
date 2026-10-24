@@ -97,7 +97,24 @@ namespace grapher.DesktopSens.Views
             }
             else if (_state == TrialState.SetTargetPoint)
             {
-                _targetPos = clickedPoint;
+                // Snap each training target to its nearest cardinal axis so every saved
+                // observation calibrates exactly one of RawAccel's four native directions.
+                double targetDx = clickedPoint.X - _startPos.X;
+                double targetDy = clickedPoint.Y - _startPos.Y;
+                double targetDistancePx = Math.Sqrt(targetDx * targetDx + targetDy * targetDy);
+                if (Math.Abs(targetDx) >= Math.Abs(targetDy))
+                {
+                    _targetPos = new PointF(
+                        _startPos.X + (targetDx < 0.0 ? -1.0f : 1.0f) * (float)targetDistancePx,
+                        _startPos.Y);
+                }
+                else
+                {
+                    _targetPos = new PointF(
+                        _startPos.X,
+                        _startPos.Y + (targetDy < 0.0 ? -1.0f : 1.0f) * (float)targetDistancePx);
+                }
+
                 double targetDistanceCm = Distance(_startPos, _targetPos) / _pixelsPerCm;
                 if (targetDistanceCm < 0.25)
                 {
@@ -326,7 +343,7 @@ namespace grapher.DesktopSens.Views
                 switch (_state)
                 {
                     case TrialState.SetStartPoint: status = "1/2: Click the START point"; break;
-                    case TrialState.SetTargetPoint: status = "2/2: Click the TARGET point"; break;
+                    case TrialState.SetTargetPoint: status = "2/2: Click target (snaps to LEFT/RIGHT/UP/DOWN)"; break;
                     case TrialState.Cooldown: status = "Get ready (3 seconds)..."; break;
                     case TrialState.Flicking: status = "Flick to the target, then click to record landing"; break;
                     case TrialState.ASDWAdjusting: status = "Adjust with W/A/S/D, then press SPACE to save trial"; break;
