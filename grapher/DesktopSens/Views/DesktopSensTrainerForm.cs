@@ -23,7 +23,9 @@ namespace grapher.DesktopSens.Views
         private PointF _targetPos;
         private PointF _currentCursorPos;
         private PointF _rawLandedPos;
-        private readonly float _pixelsPerCm = 20.0f;
+        // Scale the virtual canvas so a 100 cm target can fit on the shorter screen axis.
+        // Keep the same scale for raw-input conversion and saved trial metadata.
+        private readonly float _pixelsPerCm = Math.Min(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height) / 105.0f;
         private readonly int[] _angleZoneCounts = new int[DesktopSensConstants.AngularZoneCount];
         private readonly int[] _distanceZoneCounts = new int[DesktopSensConstants.DistanceZoneCount];
 
