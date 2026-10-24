@@ -127,7 +127,12 @@ namespace grapher.DesktopSens.Views
             if (_state == TrialState.Flicking)
                 _rawSamples.Add(sample);
 
-            if (_state != TrialState.SetTargetPoint)
+            // FPS-style relative mouse look: keep the hidden OS pointer at the monitor center
+            // during target selection and flicking, so physical cursor bounds never become
+            // the origin of rotation. Raw Input deltas, not the OS cursor position, drive yaw.
+            if (_state == TrialState.SetTargetPoint || _state == TrialState.Flicking)
+                RecenterSystemCursor();
+            else
                 MoveSystemCursorToCanvas();
             UpdateArena3D();
         }
@@ -380,6 +385,13 @@ namespace grapher.DesktopSens.Views
         {
             Point screenPoint = PointToScreen(Point.Round(_currentCursorPos));
             SetCursorPos(screenPoint.X, screenPoint.Y);
+        }
+
+        private void RecenterSystemCursor()
+        {
+            // Recenter in client coordinates, accounting for the form's actual screen origin.
+            Point center = PointToScreen(new Point(ClientSize.Width / 2, ClientSize.Height / 2));
+            SetCursorPos(center.X, center.Y);
         }
 
         private static double Distance(PointF a, PointF b)
