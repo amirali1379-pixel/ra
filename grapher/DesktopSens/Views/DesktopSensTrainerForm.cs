@@ -115,6 +115,11 @@ namespace grapher.DesktopSens.Views
                         _startPos.Y + (targetDy < 0.0 ? -1.0f : 1.0f) * (float)targetDistancePx);
                 }
 
+                // A cardinal snap can extend beyond an edge when the start point is near a corner.
+                // Clamp the snapped point back to the canvas while preserving its cardinal axis.
+                _targetPos.X = Math.Max(0, Math.Min(ClientSize.Width - 1, _targetPos.X));
+                _targetPos.Y = Math.Max(0, Math.Min(ClientSize.Height - 1, _targetPos.Y));
+
                 double targetDistanceCm = Distance(_startPos, _targetPos) / _pixelsPerCm;
                 if (targetDistanceCm < 0.25)
                 {
