@@ -12,6 +12,7 @@ namespace grapher.DesktopSens.Views
     {
         internal float YawDegrees { get; set; }
         internal float PitchDegrees { get; set; } = 18f;
+        internal Vector3 ViewDirection { get; set; } = new Vector3(0f, 0f, -1f);
         internal float Radius { get; set; } = 10f;
         internal Vector3 StartPoint { get; set; }
         internal Vector3 TargetPoint { get; set; }
@@ -47,12 +48,17 @@ namespace grapher.DesktopSens.Views
                 MathHelper.DegreesToRadians(68f), (float)Width / Height, 0.05f, 500f);
             GL.LoadMatrix(ref projection);
 
-            float yaw = MathHelper.DegreesToRadians(YawDegrees);
-            float pitch = MathHelper.DegreesToRadians(Math.Max(-15f, Math.Min(65f, PitchDegrees)));
-            Vector3 look = new Vector3((float)(Math.Sin(yaw) * Math.Cos(pitch)),
-                (float)Math.Sin(pitch), (float)(-Math.Cos(yaw) * Math.Cos(pitch)));
+            // Use the same calibration-relative direction as target construction.
+            // Rebuilding look from absolute world yaw caused the reticle to point away
+            // from the recorded calibration ray after the first mouse movement.
+            Vector3 look = ViewDirection.LengthSquared > 0.0001f
+                ? Vector3.Normalize(ViewDirection)
+                : new Vector3(0f, 0f, -1f);
             Vector3 eye = new Vector3(0f, 1.7f, 0f);
-            Matrix4 view = Matrix4.LookAt(eye, eye + look, Vector3.UnitY);
+            Vector3 up = Math.Abs(Vector3.Dot(look, Vector3.UnitY)) > 0.98f
+                ? Vector3.UnitZ
+                : Vector3.UnitY;
+            Matrix4 view = Matrix4.LookAt(eye, eye + look, up);
             GL.MatrixMode(MatrixMode.Modelview);
             GL.LoadMatrix(ref view);
 
