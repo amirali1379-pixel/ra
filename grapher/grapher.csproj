@@ -225,6 +225,7 @@
     <Compile Include="DesktopSens\Models\DesktopSensTranslator.cs" />
     <Compile Include="DesktopSens\Input\FlickRecorder.cs" />
     <Compile Include="DesktopSens\Views\DesktopSensConfigForm.cs" />
+    <Compile Include="DesktopSens\Views\Directional8WayForm.cs" />
 	<Compile Include="DesktopSens\Views\DesktopSensTrainerForm.cs" />
   </ItemGroup>
   <ItemGroup>
