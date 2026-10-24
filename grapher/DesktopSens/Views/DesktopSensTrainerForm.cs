@@ -184,10 +184,13 @@ namespace grapher.DesktopSens.Views
 
                 _rawSamples.Clear();
                 _currentCursorPos = _startPos;
-                // Re-enter hidden/raw-input aiming only after the target has been selected.
+                // Restore the exact start view so the fixed centre crosshair sits on the start marker.
+                _cameraYawDegrees = _calibrationYawDegrees;
+                _cameraPitchDegrees = _calibrationPitchDegrees;
                 Cursor.Hide();
                 MoveSystemCursorToCanvas();
                 _state = TrialState.Cooldown;
+                _cooldownTimer.Stop();
                 _cooldownTimer.Start();
             }
             else if (_state == TrialState.Flicking)
@@ -214,6 +217,10 @@ namespace grapher.DesktopSens.Views
         private void OnCooldownFinished(object sender, EventArgs e)
         {
             _cooldownTimer.Stop();
+            // Preserve the start view as the exact origin of the flick after the 3-second lock.
+            _cameraYawDegrees = _calibrationYawDegrees;
+            _cameraPitchDegrees = _calibrationPitchDegrees;
+            _currentCursorPos = _startPos;
             _state = TrialState.Flicking;
             _rawSamples.Clear();
             _trialStopwatch.Restart();
@@ -231,14 +238,15 @@ namespace grapher.DesktopSens.Views
 
             if (_state == TrialState.ASDWAdjusting)
             {
-                const float adjustmentSpeed = 2.0f;
-                if (e.KeyCode == Keys.W) _currentCursorPos.Y -= adjustmentSpeed;
-                if (e.KeyCode == Keys.S) _currentCursorPos.Y += adjustmentSpeed;
-                if (e.KeyCode == Keys.A) _currentCursorPos.X -= adjustmentSpeed;
-                if (e.KeyCode == Keys.D) _currentCursorPos.X += adjustmentSpeed;
+                // WASD adjusts the view, so the centre crosshair actually moves over the 3D target.
+                const float adjustmentSpeedDegrees = 0.35f;
+                if (e.KeyCode == Keys.W) _cameraPitchDegrees = Math.Min(35f, _cameraPitchDegrees + adjustmentSpeedDegrees);
+                if (e.KeyCode == Keys.S) _cameraPitchDegrees = Math.Max(-20f, _cameraPitchDegrees - adjustmentSpeedDegrees);
+                if (e.KeyCode == Keys.A) _cameraYawDegrees -= adjustmentSpeedDegrees;
+                if (e.KeyCode == Keys.D) _cameraYawDegrees += adjustmentSpeedDegrees;
 
+                SyncCursorPositionToCamera();
                 ClampCursorToCanvas();
-                MoveSystemCursorToCanvas();
 
                 if (e.KeyCode == Keys.Space)
                     FinishTrial();
@@ -247,6 +255,16 @@ namespace grapher.DesktopSens.Views
                 e.SuppressKeyPress = true;
                 UpdateArena3D();
             }
+        }
+
+        private void SyncCursorPositionToCamera()
+        {
+            // Keep the virtual landing/error coordinates aligned with the camera's angular aim.
+            double degreesPerPixel = 180.0 /
+                (Math.Max(0.001, _maxDistanceCm) * Math.Max(1f, _pixelsPerCm));
+            _currentCursorPos = new PointF(
+                _startPos.X + (float)((_cameraYawDegrees - _calibrationYawDegrees) / degreesPerPixel),
+                _startPos.Y - (float)((_cameraPitchDegrees - _calibrationPitchDegrees) / degreesPerPixel));
         }
 
         private void FinishTrial()
@@ -426,9 +444,9 @@ namespace grapher.DesktopSens.Views
             {
                 case TrialState.SetStartPoint: instruction = "Click to begin  |  Right-drag: look around  |  ESC: exit"; break;
                 case TrialState.SetTargetPoint: instruction = "Click a target position  |  Mouse movement: look around"; break;
-                case TrialState.Cooldown: instruction = "Get ready…"; break;
-                case TrialState.Flicking: instruction = "Turn your view to the target, then click to record landing"; break;
-                case TrialState.ASDWAdjusting: instruction = "W/A/S/D to adjust  |  SPACE to save"; break;
+                case TrialState.Cooldown: instruction = "Crosshair locked on start point · 3 seconds…"; break;
+                case TrialState.Flicking: instruction = "Flick to target 2, then left-click to record landing"; break;
+                case TrialState.ASDWAdjusting: instruction = "W/A/S/D to aim crosshair at target 2  |  SPACE to calibrate"; break;
                 default: instruction = "Trial saved  |  Click to start the next trial"; break;
             }
             _hud.Text = "DESKTOPSENS 3D  |  Yaw " + _cameraYawDegrees.ToString("0") + "°  Pitch " +
