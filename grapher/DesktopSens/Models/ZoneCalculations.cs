@@ -52,6 +52,49 @@ namespace grapher.DesktopSens.Models
             return DesktopSensConstants.DistanceZoneCount - 1;
         }
 
+        // Convert CS2 turn range to physical mouse travel for the current DPI and sensitivity.
+        public static double MaxDistanceCmForTurnDegrees(double mouseDpi, double gameSensitivity)
+        {
+            if (!IsFinite(mouseDpi) || mouseDpi <= 0.0 ||
+                !IsFinite(gameSensitivity) || gameSensitivity <= 0.0)
+                throw new ArgumentOutOfRangeException(nameof(gameSensitivity), "DPI and game sensitivity must be positive and finite.");
+
+            double countsPerCm = mouseDpi / DesktopSensConstants.InchesToCm;
+            double degreesPerCount = gameSensitivity * DesktopSensConstants.Cs2YawDegreesPerCount;
+            return DesktopSensConstants.MaxGameTurnDegrees / (countsPerCm * degreesPerCount);
+        }
+
+        // New model: keep the 0-3 cm base-sensitivity band, then distribute all remaining
+        // zones evenly across the physical travel needed for a 180-degree in-game turn.
+        public static int DistanceToZoneIndex(double distanceCm, double maxDistanceCm)
+        {
+            if (!IsFinite(distanceCm)) distanceCm = 0.0;
+            if (distanceCm < 0.0) distanceCm = 0.0;
+            if (!IsFinite(maxDistanceCm) || maxDistanceCm <= 0.0)
+                return DistanceToZoneIndex(distanceCm);
+
+            double baseMax = Math.Min(DesktopSensConstants.MicroZoneMaxCm, maxDistanceCm);
+            if (distanceCm < baseMax && baseMax > 0.0)
+            {
+                int baseIndex = (int)Math.Floor(distanceCm / baseMax * DesktopSensConstants.MicroZoneCount);
+                return Math.Max(0, Math.Min(DesktopSensConstants.MicroZoneCount - 1, baseIndex));
+            }
+
+            int accelerationZoneCount = DesktopSensConstants.DistanceZoneCount - DesktopSensConstants.MicroZoneCount;
+            double accelerationSpan = maxDistanceCm - baseMax;
+            if (accelerationZoneCount <= 0 || accelerationSpan <= 0.0)
+                return DesktopSensConstants.DistanceZoneCount - 1;
+
+            int accelerationIndex = (int)Math.Floor((distanceCm - baseMax) / accelerationSpan * accelerationZoneCount);
+            accelerationIndex = Math.Max(0, Math.Min(accelerationZoneCount - 1, accelerationIndex));
+            return DesktopSensConstants.MicroZoneCount + accelerationIndex;
+        }
+
+        private static bool IsFinite(double value)
+        {
+            return !double.IsNaN(value) && !double.IsInfinity(value);
+        }
+
         public static double ZoneIndexToDistanceCenterCm(int zoneIndex)
         {
             if (zoneIndex < DesktopSensConstants.ShortZoneStartIndex)
