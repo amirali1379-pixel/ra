@@ -13,6 +13,7 @@ namespace grapher.DesktopSens.Models
         private const double MinimumFactor = 0.5;
         private const double MaximumFactor = 2.0;
         private const double MinimumObservedDistanceCm = 0.05;
+        private const double BaseSensitivityDistanceLimitCm = 3.0;
 
         public static void Calibrate(DesktopSensProfile profile)
         {
@@ -25,8 +26,11 @@ namespace grapher.DesktopSens.Models
 
             foreach (DesktopSensTrial trial in profile.Trials)
             {
+                // Directional sensitivity is learned only in the first 3 cm. Longer flicks
+                // belong to the existing acceleration calibration and must not bias base gains.
                 if (trial == null || !trial.HasMovementMeasurement ||
-                    !IsFinite(trial.TargetDistanceCm) || trial.TargetDistanceCm <= 0.0)
+                    !IsFinite(trial.TargetDistanceCm) || trial.TargetDistanceCm <= 0.0 ||
+                    trial.TargetDistanceCm > BaseSensitivityDistanceLimitCm)
                     continue;
 
                 double error = trial.SignedErrorCm;
