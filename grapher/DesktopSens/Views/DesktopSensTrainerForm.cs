@@ -6,6 +6,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using grapher.Models.Mouse;
 using grapher.DesktopSens.Models;
+using OpenTK;
 
 namespace grapher.DesktopSens.Views
 {
@@ -32,6 +33,11 @@ namespace grapher.DesktopSens.Views
         private readonly int[] _angleZoneCounts = new int[DesktopSensConstants.AngularZoneCount];
         private readonly int[] _distanceZoneCounts = new int[DesktopSensConstants.DistanceZoneCount];
         private float _cameraYawDegrees;
+        private Vector3 _calibrationOrigin;
+        private Vector3 _calibrationForward = new Vector3(0f, 0f, -1f);
+        private Vector3 _calibrationRight = Vector3.UnitX;
+        private Vector3 _calibrationUp = Vector3.UnitY;
+        private const float CalibrationPlaneDistance = 18f;
         private float _cameraPitchDegrees = 18f;
         private bool _cameraDragging;
         private Point _cameraDragOrigin;
@@ -138,8 +144,9 @@ namespace grapher.DesktopSens.Views
 
             if (_state == TrialState.SetStartPoint)
             {
-                // Keep the origin centered so every direction in the 360-degree field is reachable.
+                // The start circle is fixed in world space on the calibration plane.
                 _startPos = new PointF(ClientSize.Width / 2f, ClientSize.Height / 2f);
+                CaptureCalibrationPlane();
                 _currentCursorPos = _startPos;
                 MoveSystemCursorToCanvas();
                 _state = TrialState.SetTargetPoint;
@@ -150,6 +157,8 @@ namespace grapher.DesktopSens.Views
                 // Clamp the target to the 180-degree turn circle so training never extrapolates
                 // beyond the configured end point.
                 _targetPos = ClampToTurnCircle(clickedPoint);
+                _arena3D.TargetPoint = ScreenPointToWorld(_targetPos);
+                _arena3D.ShowTarget = true;
 
                 double targetDistanceCm = Distance(_startPos, _targetPos) / _pixelsPerCm;
                 if (targetDistanceCm < 0.25)
@@ -178,6 +187,8 @@ namespace grapher.DesktopSens.Views
                 _rawSamples.Clear();
                 _startPos = PointF.Empty;
                 _targetPos = PointF.Empty;
+                _arena3D.ShowStart = false;
+                _arena3D.ShowTarget = false;
             }
 
             UpdateArena3D();
@@ -384,9 +395,11 @@ namespace grapher.DesktopSens.Views
             _arena3D.YawDegrees = _cameraYawDegrees;
             _arena3D.PitchDegrees = _cameraPitchDegrees;
             _arena3D.Radius = (float)_maxDistanceCm;
-            _arena3D.Target = new PointF(
-                (float)((_targetPos.X - _startPos.X) / Math.Max(1f, _pixelsPerCm) * 180.0 / _maxDistanceCm),
-                (float)((_startPos.Y - _targetPos.Y) / Math.Max(1f, _pixelsPerCm) * 180.0 / _maxDistanceCm));
+            _arena3D.StartPoint = _calibrationOrigin;
+            _arena3D.TargetPoint = ScreenPointToWorld(_targetPos);
+            _arena3D.CalibrationRight = _calibrationRight;
+            _arena3D.CalibrationUp = _calibrationUp;
+            _arena3D.ShowStart = _state != TrialState.SetStartPoint;
             _arena3D.ShowTarget = _state == TrialState.Cooldown || _state == TrialState.Flicking ||
                 _state == TrialState.ASDWAdjusting || _state == TrialState.TrialComplete;
             _arena3D.StatusText = _state.ToString();
@@ -405,6 +418,39 @@ namespace grapher.DesktopSens.Views
                 _cameraPitchDegrees.ToString("0") + "°  |  Trials " + _profile.Trials.Count + Environment.NewLine +
                 instruction + Environment.NewLine + "FPS range · raw mouse look · calibrated 180° turn-distance limit";
             _arena3D.Invalidate();
+        }
+
+        private void CaptureCalibrationPlane()
+        {
+            float yaw = MathHelper.DegreesToRadians(_cameraYawDegrees);
+            float pitch = MathHelper.DegreesToRadians(_cameraPitchDegrees);
+            _calibrationForward = Vector3.Normalize(new Vector3(
+                (float)(Math.Sin(yaw) * Math.Cos(pitch)),
+                (float)Math.Sin(pitch),
+                (float)(-Math.Cos(yaw) * Math.Cos(pitch))));
+            _calibrationRight = Vector3.Normalize(Vector3.Cross(_calibrationForward, Vector3.UnitY));
+            _calibrationUp = Vector3.Normalize(Vector3.Cross(_calibrationRight, _calibrationForward));
+            Vector3 eye = new Vector3(0f, 1.7f, 0f);
+            _calibrationOrigin = eye + _calibrationForward * CalibrationPlaneDistance;
+            _arena3D.StartPoint = _calibrationOrigin;
+            _arena3D.CalibrationRight = _calibrationRight;
+            _arena3D.CalibrationUp = _calibrationUp;
+            _arena3D.ShowStart = true;
+        }
+
+        private Vector3 ScreenPointToWorld(PointF point)
+        {
+            if (ClientSize.Width < 1 || ClientSize.Height < 1)
+                return _calibrationOrigin;
+            // Invert the scene's 68-degree perspective projection so the clicked screen
+            // position maps to the corresponding point on the fixed calibration plane.
+            double halfFovTangent = Math.Tan(68.0 * Math.PI / 360.0);
+            float nx = (float)((point.X / ClientSize.Width) * 2.0 - 1.0);
+            float ny = (float)(1.0 - (point.Y / ClientSize.Height) * 2.0);
+            float x = (float)(nx * halfFovTangent * ((float)ClientSize.Width / ClientSize.Height)
+                * CalibrationPlaneDistance);
+            float y = (float)(ny * halfFovTangent * CalibrationPlaneDistance);
+            return _calibrationOrigin + _calibrationRight * x + _calibrationUp * y;
         }
 
         private void InvalidateArena()
