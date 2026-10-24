@@ -187,18 +187,9 @@ namespace grapher.DesktopSens.Views
                 _arena3D.TargetPoint = WorldPointFromAngles(_targetYawDegrees, _targetPitchDegrees);
                 _arena3D.ShowTarget = true;
 
-                // The target picker is a full 360-degree angular arena. Do not reject
-                // targets merely because their yaw is beyond the old 180-degree turn radius.
-                // Keep the minimum-distance guard only for targets effectively at the origin.
-                double targetAngleRadians = Math.Abs(_targetYawDegrees) * Math.PI / 180.0;
-                double targetDistanceCm = _maxDistanceCm * Math.Min(1.0, targetAngleRadians / Math.PI);
-                if (targetDistanceCm < 0.25)
-                {
-                    MessageBox.Show(this, "Choose a target at least 0.25 cm away from the start point.",
-                        "Target too close", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
+                // Accept every selected direction, including targets very close to 0°.
+                // This is an angular trainer; target selection must not be blocked by a
+                // distance threshold or the old 180-degree turn-distance model.
                 _rawSamples.Clear();
                 _currentCursorPos = _startPos;
                 // Restore the exact start view so the fixed centre crosshair sits on the start marker.
@@ -464,7 +455,7 @@ namespace grapher.DesktopSens.Views
             switch (_state)
             {
                 case TrialState.SetStartPoint: instruction = "Click to begin  |  Right-drag: look around  |  ESC: exit"; break;
-                case TrialState.SetTargetPoint: instruction = "Click a target position  |  Mouse movement: look around"; break;
+                case TrialState.SetTargetPoint: instruction = "Aiming target: " + NormalizeAngle(_cameraYawDegrees - _calibrationYawDegrees).ToString("0.0") + "°  |  Left-click to place target"; break;
                 case TrialState.Cooldown: instruction = "Crosshair locked on start point · 3 seconds…"; break;
                 case TrialState.Flicking: instruction = "Flick to target 2, then left-click to record landing"; break;
                 case TrialState.ASDWAdjusting: instruction = "W/A/S/D to aim crosshair at target 2  |  SPACE to calibrate"; break;
@@ -472,11 +463,11 @@ namespace grapher.DesktopSens.Views
             }
             double relativeYaw = NormalizeAngle(_cameraYawDegrees - _calibrationYawDegrees);
             string angleReadout = _state == TrialState.SetTargetPoint
-                ? "TARGET ANGLE " + relativeYaw.ToString("0.0") + "°"
+                ? "CROSSHAIR / TARGET ANGLE: " + relativeYaw.ToString("0.0") + "°"
                 : (_state == TrialState.Cooldown || _state == TrialState.Flicking ||
                    _state == TrialState.ASDWAdjusting || _state == TrialState.TrialComplete
-                    ? "TARGET " + _targetYawDegrees.ToString("0.0") + "°  |  LANDING " +
-                      (_state == TrialState.SetTargetPoint ? "--" : _landedYawDegrees.ToString("0.0") + "°")
+                    ? "TARGET: " + _targetYawDegrees.ToString("0.0") + "°  |  LANDING: " +
+                      _landedYawDegrees.ToString("0.0") + "°"
                     : "0° = calibration");
             _hud.Text = "DESKTOPSENS 3D  |  Relative yaw " + relativeYaw.ToString("0.0") + "°  Pitch " +
                 _cameraPitchDegrees.ToString("0.0") + "°  |  Trials " + _profile.Trials.Count + Environment.NewLine +
