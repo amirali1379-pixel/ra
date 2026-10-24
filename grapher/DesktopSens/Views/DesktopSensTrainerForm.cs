@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using grapher.Models.Mouse;
@@ -47,7 +48,7 @@ namespace grapher.DesktopSens.Views
 
             FormBorderStyle = FormBorderStyle.None;
             WindowState = FormWindowState.Maximized;
-            BackColor = Color.FromArgb(30, 30, 30);
+            BackColor = Color.FromArgb(24, 26, 29);
             DoubleBuffered = true;
             KeyPreview = true;
             Cursor.Hide();
@@ -318,68 +319,109 @@ namespace grapher.DesktopSens.Views
         {
             base.OnPaint(e);
             Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
+            using (var background = new LinearGradientBrush(
+                ClientRectangle,
+                Color.FromArgb(19, 21, 24),
+                Color.FromArgb(35, 38, 42),
+                LinearGradientMode.ForwardDiagonal))
             using (var statusFont = new Font("Arial", 16, FontStyle.Bold))
             using (var smallFont = new Font("Arial", 9))
+            using (var compassFont = new Font("Arial", 10, FontStyle.Bold))
+            using (var faintGridPen = new Pen(Color.FromArgb(22, 145, 153, 160), 1f))
+            using (var zonePen = new Pen(Color.FromArgb(58, 142, 151, 158), 1f))
+            using (var usedZonePen = new Pen(Color.FromArgb(150, 86, 166, 151), 1.5f))
+            using (var ringPen = new Pen(Color.FromArgb(80, 151, 160, 166), 1f))
+            using (var basePen = new Pen(Color.FromArgb(130, 111, 151, 157), 1.2f))
+            using (var outerPen = new Pen(Color.FromArgb(175, 183, 190, 195), 1.8f))
+            using (var targetPen = new Pen(Color.FromArgb(190, 194, 155, 105), 1.5f))
+            using (var cursorPen = new Pen(Color.FromArgb(220, 220, 224, 226), 1.5f))
+            using (var labelBrush = new SolidBrush(Color.FromArgb(175, 183, 190, 195)))
+            using (var mutedBrush = new SolidBrush(Color.FromArgb(150, 148, 157, 164)))
+            using (var targetBrush = new SolidBrush(Color.FromArgb(230, 201, 166, 119)))
+            using (var centerBrush = new SolidBrush(Color.FromArgb(220, 122, 157, 159)))
+            using (var statusBrush = new SolidBrush(Color.FromArgb(235, 219, 222, 224)))
+            using (var usedZoneBrush = new SolidBrush(Color.FromArgb(220, 119, 180, 164)))
             {
-                // Draw the 3 cm base-sensitivity boundary and the 45/90/135/180-degree
-                // in-game turn rings. The outer ring is the hard end of this training model.
-                float baseRadius = (float)(Math.Min(3.0, _maxDistanceCm) * _pixelsPerCm);
-                g.DrawEllipse(Pens.DarkCyan, _startPos.X - baseRadius, _startPos.Y - baseRadius,
-                    baseRadius * 2, baseRadius * 2);
-                g.DrawString("3 cm base", smallFont, Brushes.DarkCyan,
-                    _startPos.X + baseRadius + 3, _startPos.Y);
+                g.FillRectangle(background, ClientRectangle);
 
-                double[] turnRings = { 45.0, 90.0, 135.0, DesktopSensConstants.MaxGameTurnDegrees };
+                // Subtle crosshair/grid anchors help orientation without making the screen glow.
+                int gridStep = 80;
+                for (int x = ClientSize.Width / 2 % gridStep; x < ClientSize.Width; x += gridStep)
+                    g.DrawLine(faintGridPen, x, 0, x, ClientSize.Height);
+                for (int y = ClientSize.Height / 2 % gridStep; y < ClientSize.Height; y += gridStep)
+                    g.DrawLine(faintGridPen, 0, y, ClientSize.Width, y);
+
+                float outerRadius = (float)(_maxDistanceCm * _pixelsPerCm);
+                // Full 360-degree field; the soft rings are visual guides for the in-game turn.
+                float baseRadius = (float)(Math.Min(3.0, _maxDistanceCm) * _pixelsPerCm);
+                g.DrawEllipse(basePen, _startPos.X - baseRadius, _startPos.Y - baseRadius,
+                    baseRadius * 2, baseRadius * 2);
+                g.DrawString("BASE", smallFont, mutedBrush,
+                    _startPos.X + baseRadius + 4, _startPos.Y + 5);
+
+                double[] turnRings = { 45.0, 90.0, 135.0 };
                 foreach (double turnDegrees in turnRings)
                 {
-                    float radius = (float)(turnDegrees / DesktopSensConstants.MaxGameTurnDegrees *
-                        _maxDistanceCm * _pixelsPerCm);
-                    g.DrawEllipse(Pens.DarkCyan, _startPos.X - radius, _startPos.Y - radius,
+                    float radius = (float)(turnDegrees / DesktopSensConstants.MaxGameTurnDegrees * outerRadius);
+                    g.DrawEllipse(ringPen, _startPos.X - radius, _startPos.Y - radius,
                         radius * 2, radius * 2);
-                    g.DrawString(turnDegrees.ToString("0") + "° turn", smallFont, Brushes.DarkCyan,
-                        _startPos.X + radius + 3, _startPos.Y);
+                    g.DrawString(turnDegrees.ToString("0") + "°", smallFont, mutedBrush,
+                        _startPos.X + radius + 4, _startPos.Y + 3);
                 }
+                g.DrawEllipse(outerPen, _startPos.X - outerRadius, _startPos.Y - outerRadius,
+                    outerRadius * 2, outerRadius * 2);
+                g.DrawString("180° END", smallFont, labelBrush,
+                    _startPos.X + outerRadius - 62, _startPos.Y - 18);
 
                 for (int i = 0; i < DesktopSensConstants.AngularZoneCount; i++)
                 {
                     double angleRad = i * DesktopSensConstants.AngularZoneSizeDegrees * Math.PI / 180.0;
-                    float radius = (float)(_maxDistanceCm * _pixelsPerCm);
-                    float xEnd = _startPos.X + (float)(Math.Cos(angleRad) * radius);
-                    float yEnd = _startPos.Y + (float)(Math.Sin(angleRad) * radius);
-                    g.DrawLine(_angleZoneCounts[i] > 0 ? Pens.Lime : Pens.DimGray,
+                    float xEnd = _startPos.X + (float)(Math.Cos(angleRad) * outerRadius);
+                    float yEnd = _startPos.Y + (float)(Math.Sin(angleRad) * outerRadius);
+                    g.DrawLine(_angleZoneCounts[i] > 0 ? usedZonePen : zonePen,
                         _startPos.X, _startPos.Y, xEnd, yEnd);
-                    g.DrawString(_angleZoneCounts[i].ToString(), smallFont, Brushes.White, xEnd, yEnd);
+                    if (_angleZoneCounts[i] > 0)
+                        g.DrawString(_angleZoneCounts[i].ToString(), smallFont, usedZoneBrush,
+                            xEnd - 5, yEnd - 14);
                 }
 
+                // Cardinal labels make it easier to feel the full circular space while turning.
+                g.DrawString("0°", compassFont, labelBrush, _startPos.X + outerRadius + 8, _startPos.Y - 8);
+                g.DrawString("90°", compassFont, labelBrush, _startPos.X - 12, _startPos.Y + outerRadius + 8);
+                g.DrawString("180°", compassFont, labelBrush, _startPos.X - outerRadius - 43, _startPos.Y - 8);
+                g.DrawString("270°", compassFont, labelBrush, _startPos.X - 18, _startPos.Y - outerRadius - 24);
+
                 if (_state != TrialState.SetStartPoint)
-                    g.FillEllipse(Brushes.Red, _startPos.X - 6, _startPos.Y - 6, 12, 12);
+                    g.FillEllipse(centerBrush, _startPos.X - 5, _startPos.Y - 5, 10, 10);
                 if (_state == TrialState.Cooldown || _state == TrialState.Flicking ||
                     _state == TrialState.ASDWAdjusting || _state == TrialState.TrialComplete)
                 {
-                    g.FillEllipse(Brushes.Lime, _targetPos.X - 6, _targetPos.Y - 6, 12, 12);
-                    g.DrawLine(Pens.Orange, _startPos, _targetPos);
+                    g.FillEllipse(targetBrush, _targetPos.X - 5, _targetPos.Y - 5, 10, 10);
+                    g.DrawLine(targetPen, _startPos, _targetPos);
                 }
 
-                g.DrawLine(Pens.White, _currentCursorPos.X - 10, _currentCursorPos.Y,
-                    _currentCursorPos.X + 10, _currentCursorPos.Y);
-                g.DrawLine(Pens.White, _currentCursorPos.X, _currentCursorPos.Y - 10,
-                    _currentCursorPos.X, _currentCursorPos.Y + 10);
+                g.DrawLine(cursorPen, _currentCursorPos.X - 9, _currentCursorPos.Y,
+                    _currentCursorPos.X + 9, _currentCursorPos.Y);
+                g.DrawLine(cursorPen, _currentCursorPos.X, _currentCursorPos.Y - 9,
+                    _currentCursorPos.X, _currentCursorPos.Y + 9);
+                g.DrawEllipse(cursorPen, _currentCursorPos.X - 4, _currentCursorPos.Y - 4, 8, 8);
 
                 string status;
                 switch (_state)
                 {
                     case TrialState.SetStartPoint: status = "1/2: Click to center the start point"; break;
-                    case TrialState.SetTargetPoint: status = "2/2: Click any direction in the 360° field (max 180° turn)"; break;
+                    case TrialState.SetTargetPoint: status = "2/2: Choose any direction in the 360° field"; break;
                     case TrialState.Cooldown: status = "Get ready (3 seconds)..."; break;
                     case TrialState.Flicking: status = "Flick to the target, then click to record landing"; break;
                     case TrialState.ASDWAdjusting: status = "Adjust with W/A/S/D, then press SPACE to save trial"; break;
                     default: status = "Trial saved. Click to start a new trial (ESC to exit)."; break;
                 }
-                g.DrawString(status, statusFont, Brushes.Yellow, 20, 20);
-                g.DrawString("180° turn radius: " + _maxDistanceCm.ToString("0.##") +
-                    " cm | 32 direction zones | Trials: " + _profile.Trials.Count,
-                    smallFont, Brushes.White, 20, 48);
+                g.DrawString(status, statusFont, statusBrush, 20, 20);
+                g.DrawString("180° turn boundary | 360° directional field | Trials: " +
+                    _profile.Trials.Count, smallFont, labelBrush, 20, 48);
             }
         }
     }
