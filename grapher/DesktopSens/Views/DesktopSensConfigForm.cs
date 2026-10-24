@@ -244,7 +244,14 @@ namespace grapher.DesktopSens.Views
                             {
                                 if (trial == null) continue;
                                 trial.AngleZoneIndex = ZoneCalculations.AngleToZoneIndex(trial.TargetAngleDegrees);
-                                trial.DistanceZoneIndex = ZoneCalculations.DistanceToZoneIndex(trial.TargetDistanceCm);
+                                double trialSensitivity = trial.GameSensitivity > 0.0
+                                    ? trial.GameSensitivity
+                                    : profile.UserInputGameSensitivity;
+                                double trialDpi = trial.MouseDPI > 0 ? trial.MouseDPI : profile.MouseDPI;
+                                double maxTurnDistanceCm = ZoneCalculations.MaxDistanceCmForTurnDegrees(
+                                    trialDpi, trialSensitivity);
+                                trial.DistanceZoneIndex = ZoneCalculations.DistanceToZoneIndex(
+                                    trial.TargetDistanceCm, maxTurnDistanceCm);
                             }
 
                             DesktopSensCalibrator.Calibrate(profile);
