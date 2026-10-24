@@ -147,9 +147,15 @@ namespace grapher.DesktopSens.Views
                     return;
                 }
 
+                // Keep a stable base DPI in the saved profile so pressing Apply repeatedly
+                // does not multiply the right-direction factor over and over.
+                double baseOutputDPI = _profile.RawAccelBaseOutputDPI;
+                if (double.IsNaN(baseOutputDPI) || double.IsInfinity(baseOutputDPI) || baseOutputDPI <= 0.0)
+                    baseOutputDPI = settings.outputDPI;
+
                 // RawAccel natively applies X direction by sign and Y direction by sign.
                 // These ratios map the four independent calibrated gains without another input path.
-                settings.outputDPI *= right;
+                settings.outputDPI = baseOutputDPI * right;
                 settings.lrOutputDPIRatio = left / right;
                 settings.yxOutputDPIRatio = down / right;
                 settings.udOutputDPIRatio = up / down;
@@ -161,6 +167,8 @@ namespace grapher.DesktopSens.Views
                     return;
                 }
 
+                _profile.RawAccelBaseOutputDPI = baseOutputDPI;
+                SaveProfileToDisk();
                 _accelGUI.RefreshActive();
                 _accelGUI.RefreshUser();
                 _profileStatus.Text = "Applied to RawAccel | R " + right.ToString("0.###", CultureInfo.InvariantCulture) +
