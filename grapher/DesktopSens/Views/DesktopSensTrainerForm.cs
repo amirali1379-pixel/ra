@@ -502,6 +502,10 @@ namespace grapher.DesktopSens.Views
             if (_arena3D == null || _arena3D.IsDisposed) return;
             _arena3D.YawDegrees = _cameraYawDegrees;
             _arena3D.PitchDegrees = _cameraPitchDegrees;
+            // The camera and markers must use the same calibration-relative basis.
+            // Passing absolute yaw to the renderer made the crosshair and arena disagree
+            // whenever calibration began at a non-zero view angle.
+            _arena3D.ViewDirection = CameraDirectionFromCalibration();
             _arena3D.Radius = (float)_maxDistanceCm;
             _arena3D.StartPoint = _calibrationOrigin;
             _arena3D.TargetPoint = WorldPointFromAngles(_targetYawDegrees, _targetPitchDegrees, _targetDistanceCm);
@@ -560,6 +564,19 @@ namespace grapher.DesktopSens.Views
             _selectedAngleLabel.BringToFront();
             _hud.BringToFront();
             _arena3D.Invalidate();
+        }
+
+        private Vector3 CameraDirectionFromCalibration()
+        {
+            double yaw = NormalizeSignedAngle(_cameraYawDegrees - _calibrationYawDegrees) * Math.PI / 180.0;
+            double pitch = (_cameraPitchDegrees - _calibrationPitchDegrees) * Math.PI / 180.0;
+
+            Vector3 horizontal = Vector3.Normalize(
+                _calibrationForward * (float)Math.Cos(yaw) +
+                _calibrationRight * (float)Math.Sin(yaw));
+            return Vector3.Normalize(
+                horizontal * (float)Math.Cos(pitch) +
+                _calibrationUp * (float)Math.Sin(pitch));
         }
 
         private void CaptureCalibrationPlane()
