@@ -71,7 +71,7 @@ namespace grapher
                     form.ShowDialog();
                 }
             };
-            var directional8WayMenuItem = new ToolStripMenuItem("&Directional 8-Way Sensitivity");
+            var directional8WayMenuItem = new ToolStripMenuItem("&Directional Sensitivity (4-Way)");
             directional8WayMenuItem.Click += (s, e) => {
                 using (var form = new Directional8WayForm(AccelGUI))
                 {
