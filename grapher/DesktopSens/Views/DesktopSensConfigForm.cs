@@ -234,6 +234,26 @@ namespace grapher.DesktopSens.Views
                     if (profile != null)
                     {
                         if (profile.Trials == null) profile.Trials = new System.Collections.Generic.List<DesktopSensTrial>();
+
+                        // Re-map historical observations to the current zone layout before
+                        // recalibrating, because older profiles used 23 distance zones ending at 40 cm.
+                        if (profile.SchemaVersion < DesktopSensConstants.CurrentSchemaVersion ||
+                            profile.ModelVersion < DesktopSensConstants.CurrentModelVersion)
+                        {
+                            foreach (DesktopSensTrial trial in profile.Trials)
+                            {
+                                if (trial == null) continue;
+                                trial.AngleZoneIndex = ZoneCalculations.AngleToZoneIndex(trial.TargetAngleDegrees);
+                                trial.DistanceZoneIndex = ZoneCalculations.DistanceToZoneIndex(trial.TargetDistanceCm);
+                            }
+
+                            DesktopSensCalibrator.Calibrate(profile);
+                            DirectionalCalibrator.Calibrate(profile);
+                            profile.SchemaVersion = DesktopSensConstants.CurrentSchemaVersion;
+                            profile.ModelVersion = DesktopSensConstants.CurrentModelVersion;
+                            profile.ModifiedTimestamp = DateTime.UtcNow;
+                        }
+
                         return profile;
                     }
                 }
