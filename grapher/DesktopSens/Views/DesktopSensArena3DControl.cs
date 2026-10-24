@@ -13,8 +13,11 @@ namespace grapher.DesktopSens.Views
         internal float YawDegrees { get; set; }
         internal float PitchDegrees { get; set; } = 18f;
         internal float Radius { get; set; } = 10f;
-        internal PointF Target { get; set; }
-        internal PointF CursorWorld { get; set; }
+        internal Vector3 StartPoint { get; set; }
+        internal Vector3 TargetPoint { get; set; }
+        internal Vector3 CalibrationRight { get; set; } = Vector3.UnitX;
+        internal Vector3 CalibrationUp { get; set; } = Vector3.UnitY;
+        internal bool ShowStart { get; set; }
         internal bool ShowTarget { get; set; }
         internal string StatusText { get; set; } = "";
         internal int TrialCount { get; set; }
@@ -53,8 +56,10 @@ namespace grapher.DesktopSens.Views
             GL.LoadMatrix(ref view);
 
             DrawIndoorRange();
+            if (ShowStart)
+                DrawCalibrationCircle(StartPoint, CalibrationRight, CalibrationUp, 0.20f, 0.25f, 0.95f, 0.55f);
             if (ShowTarget)
-                DrawTargetBoard(Target);
+                DrawCalibrationCircle(TargetPoint, CalibrationRight, CalibrationUp, 0.32f, 1.0f, 0.55f, 0.18f);
             DrawScreenCrosshair();
             SwapBuffers();
         }
@@ -146,43 +151,29 @@ namespace grapher.DesktopSens.Views
             GL.End();
         }
 
-        private static void DrawTargetBoard(PointF target)
+        // A world-space ring on the original calibration plane. Both markers stay fixed
+        // while the camera rotates, so the crosshair can move over them naturally.
+        private static void DrawCalibrationCircle(Vector3 center, Vector3 right, Vector3 up,
+            float radius, float red, float green, float blue)
         {
-            // Target values are angular-distance proxies in calibrated cm. Convert them
-            // to a vertical board position at a fixed range, rather than drawing a marker on the floor.
-            const float boardDistance = 18f;
-            float x = (float)Math.Tan(target.X * Math.PI / 180.0) * boardDistance;
-            float y = 1.7f + (float)Math.Tan(target.Y * Math.PI / 180.0) * boardDistance;
-            y = Math.Max(0.35f, Math.Min(6.8f, y));
-
-            GL.Begin(PrimitiveType.Quads);
-            GL.Color3(0.30f, 0.32f, 0.32f);
-            GL.Vertex3(x - 0.72f, y - 0.72f, -boardDistance);
-            GL.Vertex3(x + 0.72f, y - 0.72f, -boardDistance);
-            GL.Vertex3(x + 0.72f, y + 0.72f, -boardDistance);
-            GL.Vertex3(x - 0.72f, y + 0.72f, -boardDistance);
-            GL.End();
-
-            GL.LineWidth(2f);
+            Vector3 normal = Vector3.Normalize(Vector3.Cross(right, up));
+            center += normal * 0.035f;
+            GL.LineWidth(3f);
             GL.Begin(PrimitiveType.LineLoop);
-            GL.Color3(0.92f, 0.36f, 0.22f);
-            GL.Vertex3(x - 0.58f, y - 0.58f, -boardDistance + 0.01f);
-            GL.Vertex3(x + 0.58f, y - 0.58f, -boardDistance + 0.01f);
-            GL.Vertex3(x + 0.58f, y + 0.58f, -boardDistance + 0.01f);
-            GL.Vertex3(x - 0.58f, y + 0.58f, -boardDistance + 0.01f);
-            GL.End();
-            GL.Begin(PrimitiveType.LineLoop);
-            GL.Color3(0.96f, 0.75f, 0.25f);
-            for (int i = 0; i < 48; i++)
+            GL.Color3(red, green, blue);
+            for (int i = 0; i < 64; i++)
             {
-                double a = i * Math.PI * 2 / 48.0;
-                GL.Vertex3(x + Math.Cos(a) * 0.38, y + Math.Sin(a) * 0.38, -boardDistance + 0.02f);
+                float angle = (float)(i * Math.PI * 2.0 / 64.0);
+                Vector3 p = center + right * ((float)Math.Cos(angle) * radius)
+                    + up * ((float)Math.Sin(angle) * radius);
+                GL.Vertex3(p);
             }
             GL.End();
-            GL.Begin(PrimitiveType.Lines);
-            GL.Color3(0.96f, 0.75f, 0.25f);
-            GL.Vertex3(x - 0.22f, y, -boardDistance + 0.03f); GL.Vertex3(x + 0.22f, y, -boardDistance + 0.03f);
-            GL.Vertex3(x, y - 0.22f, -boardDistance + 0.03f); GL.Vertex3(x, y + 0.22f, -boardDistance + 0.03f);
+
+            GL.PointSize(5f);
+            GL.Begin(PrimitiveType.Points);
+            GL.Color3(red, green, blue);
+            GL.Vertex3(center);
             GL.End();
         }
 
