@@ -14,6 +14,8 @@ namespace grapher.DesktopSens.Models
         public double UserInputGameSensitivity = 1.0;
         public double BaseSensitivity = 1.0;
         public double BaseSensitivityConfidence = 0.0;
+        // Original RawAccel output DPI captured on first profile application, preventing repeated-apply compounding.
+        public double RawAccelBaseOutputDPI = 0.0;
 
         // Four cardinal-direction sensitivity multipliers produced by the 4-way trainer.
         // These are persisted with the profile and mapped onto RawAccel's native directional ratios.
