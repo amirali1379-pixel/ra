@@ -5,8 +5,8 @@ namespace grapher.DesktopSens.Models
 {
     public class DesktopSensProfile
     {
-        public int SchemaVersion = 2;
-        public int ModelVersion = 2;
+        public int SchemaVersion = DesktopSensConstants.CurrentSchemaVersion;
+        public int ModelVersion = DesktopSensConstants.CurrentModelVersion;
         public string ProfileId = Guid.NewGuid().ToString();
         public DateTime CreatedTimestamp = DateTime.UtcNow;
         public DateTime ModifiedTimestamp = DateTime.UtcNow;
@@ -37,8 +37,8 @@ namespace grapher.DesktopSens.Models
         public double[] AccelerationFactor = new double[DesktopSensConstants.DistanceZoneCount];
         public double[] AccelerationConfidence = new double[DesktopSensConstants.DistanceZoneCount];
 
-        // New per-cell values: one independent value for each angle (32) x distance zone (23).
-        // Cell index = angleZone * DistanceZoneCount + distanceZone.
+        // New per-cell values: one independent value for each angle (32) x distance zone (46).
+        // Cell index = angleZone * DistanceZoneCount + distanceZone. Existing profiles are resized by calibration.
         public double[] CellSensitivityFactor = new double[DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount];
         public double[] CellSensitivityConfidence = new double[DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount];
         public double[] CellAccelerationFactor = new double[DesktopSensConstants.AngularZoneCount * DesktopSensConstants.DistanceZoneCount];
