@@ -184,7 +184,7 @@ namespace grapher.DesktopSens.Views
                 _targetPos = new PointF(
                     _startPos.X + (float)(Math.Sin(targetYawRadians) * arenaRadiusPx),
                     _startPos.Y - (float)(Math.Cos(targetYawRadians) * arenaRadiusPx));
-                _arena3D.TargetPoint = ScreenPointToWorld(_targetPos);
+                _arena3D.TargetPoint = WorldPointFromAngles(_targetYawDegrees, _targetPitchDegrees);
                 _arena3D.ShowTarget = true;
 
                 // The target picker is a full 360-degree angular arena. Do not reject
@@ -451,7 +451,7 @@ namespace grapher.DesktopSens.Views
             _arena3D.PitchDegrees = _cameraPitchDegrees;
             _arena3D.Radius = (float)_maxDistanceCm;
             _arena3D.StartPoint = _calibrationOrigin;
-            _arena3D.TargetPoint = ScreenPointToWorld(_targetPos);
+            _arena3D.TargetPoint = WorldPointFromAngles(_targetYawDegrees, _targetPitchDegrees);
             _arena3D.CalibrationRight = _calibrationRight;
             _arena3D.CalibrationUp = _calibrationUp;
             _arena3D.ShowStart = _state != TrialState.SetStartPoint;
@@ -469,9 +469,18 @@ namespace grapher.DesktopSens.Views
                 case TrialState.ASDWAdjusting: instruction = "W/A/S/D to aim crosshair at target 2  |  SPACE to calibrate"; break;
                 default: instruction = "Trial saved  |  Click to start the next trial"; break;
             }
-            _hud.Text = "DESKTOPSENS 3D  |  Yaw " + _cameraYawDegrees.ToString("0") + "°  Pitch " +
-                _cameraPitchDegrees.ToString("0") + "°  |  Trials " + _profile.Trials.Count + Environment.NewLine +
-                instruction + Environment.NewLine + "FPS range · raw mouse look · 360° cylindrical angular arena";
+            double relativeYaw = NormalizeAngle(_cameraYawDegrees - _calibrationYawDegrees);
+            string angleReadout = _state == TrialState.SetTargetPoint
+                ? "TARGET ANGLE " + relativeYaw.ToString("0.0") + "°"
+                : (_state == TrialState.Cooldown || _state == TrialState.Flicking ||
+                   _state == TrialState.ASDWAdjusting || _state == TrialState.TrialComplete
+                    ? "TARGET " + _targetYawDegrees.ToString("0.0") + "°  |  LANDING " +
+                      (_state == TrialState.SetTargetPoint ? "--" : _landedYawDegrees.ToString("0.0") + "°")
+                    : "0° = calibration");
+            _hud.Text = "DESKTOPSENS 3D  |  Relative yaw " + relativeYaw.ToString("0.0") + "°  Pitch " +
+                _cameraPitchDegrees.ToString("0.0") + "°  |  Trials " + _profile.Trials.Count + Environment.NewLine +
+                angleReadout + Environment.NewLine + instruction +
+                Environment.NewLine + "360° arena · angles relative to the fixed 0° start";
             _arena3D.Invalidate();
         }
 
@@ -493,6 +502,23 @@ namespace grapher.DesktopSens.Views
             _arena3D.CalibrationRight = _calibrationRight;
             _arena3D.CalibrationUp = _calibrationUp;
             _arena3D.ShowStart = true;
+        }
+
+        private Vector3 WorldPointFromAngles(double yawDegrees, double pitchDegrees)
+        {
+            // Construct the marker directly from its measured angular coordinates.
+            // Do not infer its world angle from a projected screen pixel: that mapping
+            // compressed and distorted the 360-degree circle.
+            double yaw = yawDegrees * Math.PI / 180.0;
+            double pitch = pitchDegrees * Math.PI / 180.0;
+            Vector3 horizontal = Vector3.Normalize(
+                _calibrationForward * (float)Math.Cos(yaw) +
+                _calibrationRight * (float)Math.Sin(yaw));
+            Vector3 direction = Vector3.Normalize(
+                horizontal * (float)Math.Cos(pitch) +
+                _calibrationUp * (float)Math.Sin(pitch));
+            Vector3 eye = new Vector3(0f, 1.7f, 0f);
+            return eye + direction * CalibrationPlaneDistance;
         }
 
         private Vector3 ScreenPointToWorld(PointF point)
