@@ -26,6 +26,10 @@ namespace grapher.DesktopSens.Views
         private PointF _targetPos;
         private PointF _currentCursorPos;
         private PointF _rawLandedPos;
+        private double _targetYawDegrees;
+        private double _targetPitchDegrees;
+        private double _landedYawDegrees;
+        private double _landedPitchDegrees;
         // The circular trainer radius represents exactly a 180-degree CS2 turn.
         // The conversion depends on the current mouse DPI and CS2 sensitivity.
         private readonly double _maxDistanceCm;
@@ -171,17 +175,19 @@ namespace grapher.DesktopSens.Views
             {
                 // The crosshair stays at screen center. Its direction relative to the view
                 // captured at Start defines the target angle; ignore the OS click coordinates.
-                double degreesPerPixel = 180.0 /
-                    (Math.Max(0.001, _maxDistanceCm) * Math.Max(1f, _pixelsPerCm));
-                double deltaYaw = _cameraYawDegrees - _calibrationYawDegrees;
-                double deltaPitch = _cameraPitchDegrees - _calibrationPitchDegrees;
-                _targetPos = ClampToTurnCircle(new PointF(
-                    _startPos.X + (float)(deltaYaw / degreesPerPixel),
-                    _startPos.Y - (float)(deltaPitch / degreesPerPixel)));
+                // Store the target as angles, not only as a 2D point. A screen coordinate
+                // repeats every 360 degrees, so it cannot uniquely represent multiple turns.
+                _targetYawDegrees = NormalizeAngle(_cameraYawDegrees - _calibrationYawDegrees);
+                _targetPitchDegrees = _cameraPitchDegrees - _calibrationPitchDegrees;
+                double arenaRadiusPx = Math.Max(1.0, Math.Min(ClientSize.Width, ClientSize.Height) * 0.42);
+                double targetYawRadians = _targetYawDegrees * Math.PI / 180.0;
+                _targetPos = new PointF(
+                    _startPos.X + (float)(Math.Sin(targetYawRadians) * arenaRadiusPx),
+                    _startPos.Y - (float)(Math.Cos(targetYawRadians) * arenaRadiusPx));
                 _arena3D.TargetPoint = ScreenPointToWorld(_targetPos);
                 _arena3D.ShowTarget = true;
 
-                double targetDistanceCm = Distance(_startPos, _targetPos) / _pixelsPerCm;
+                double targetDistanceCm = _maxDistanceCm * _targetYawDegrees / 180.0;
                 if (targetDistanceCm < 0.25)
                 {
                     MessageBox.Show(this, "Choose a target at least 0.25 cm away from the start point.",
@@ -205,6 +211,8 @@ namespace grapher.DesktopSens.Views
                 // Preserve the actual mouse-flick landing before keyboard correction. Sens/accel
                 // learn from this raw landing; rotation must not be hidden by the ASDW adjustment.
                 _rawLandedPos = _currentCursorPos;
+                _landedYawDegrees = NormalizeAngle(_cameraYawDegrees - _calibrationYawDegrees);
+                _landedPitchDegrees = _cameraPitchDegrees - _calibrationPitchDegrees;
                 _state = TrialState.ASDWAdjusting;
             }
             else if (_state == TrialState.TrialComplete)
@@ -266,12 +274,13 @@ namespace grapher.DesktopSens.Views
 
         private void SyncCursorPositionToCamera()
         {
-            // Keep the virtual landing/error coordinates aligned with the camera's angular aim.
-            double degreesPerPixel = 180.0 /
-                (Math.Max(0.001, _maxDistanceCm) * Math.Max(1f, _pixelsPerCm));
+            // Visualize the current yaw on a circular 360-degree map. Measurement angles
+            // are kept separately so crossing 0/360 never relocates the recorded landing.
+            double yawRadians = NormalizeAngle(_cameraYawDegrees - _calibrationYawDegrees) * Math.PI / 180.0;
+            double arenaRadiusPx = Math.Max(1.0, Math.Min(ClientSize.Width, ClientSize.Height) * 0.42);
             _currentCursorPos = new PointF(
-                _startPos.X + (float)((_cameraYawDegrees - _calibrationYawDegrees) / degreesPerPixel),
-                _startPos.Y - (float)((_cameraPitchDegrees - _calibrationPitchDegrees) / degreesPerPixel));
+                _startPos.X + (float)(Math.Sin(yawRadians) * arenaRadiusPx),
+                _startPos.Y - (float)(Math.Cos(yawRadians) * arenaRadiusPx));
         }
 
         private void FinishTrial()
@@ -279,24 +288,17 @@ namespace grapher.DesktopSens.Views
             _trialStopwatch.Stop();
             _state = TrialState.TrialComplete;
 
-            double targetDx = _targetPos.X - _startPos.X;
-            double targetDy = _targetPos.Y - _startPos.Y;
-            double targetDistancePx = Math.Sqrt(targetDx * targetDx + targetDy * targetDy);
-            if (targetDistancePx <= 0.0) return;
-
-            double targetAngle = NormalizeAngle(Math.Atan2(targetDy, targetDx) * 180.0 / Math.PI);
-            double actualDx = _rawLandedPos.X - _startPos.X;
-            double actualDy = _rawLandedPos.Y - _startPos.Y;
-            double actualDistancePx = Math.Sqrt(actualDx * actualDx + actualDy * actualDy);
-            double targetUnitX = targetDx / targetDistancePx;
-            double targetUnitY = targetDy / targetDistancePx;
-            double projectedDistancePx = actualDx * targetUnitX + actualDy * targetUnitY;
-            double signedErrorCm = (projectedDistancePx - targetDistancePx) / _pixelsPerCm;
-            double finalErrorCm = Distance(_currentCursorPos, _targetPos) / _pixelsPerCm;
-            double targetDistanceCm = targetDistancePx / _pixelsPerCm;
-            double flickAngle = NormalizeAngle(Math.Atan2(actualDy, actualDx) * 180.0 / Math.PI);
-            double flickDistanceCm = actualDistancePx / _pixelsPerCm;
-
+            // Compare angular measurements directly. Do not derive them from the projected
+            // screen points: those points alias after a full turn and corrupt 360-degree trials.
+            double targetAngle = NormalizeAngle(_targetYawDegrees);
+            double flickAngle = NormalizeAngle(_landedYawDegrees);
+            double signedRotationError = NormalizeSignedAngle(targetAngle - flickAngle);
+            double targetDistanceCm = _maxDistanceCm * targetAngle / 180.0;
+            double flickDistanceCm = _maxDistanceCm * flickAngle / 180.0;
+            double signedErrorCm = (flickDistanceCm - targetDistanceCm);
+            double finalErrorCm = Math.Abs(signedRotationError) * _maxDistanceCm / 180.0;
+            double projectedDistancePx = (targetDistanceCm + signedErrorCm) * _pixelsPerCm;
+            double actualDistancePx = flickDistanceCm * _pixelsPerCm;
             double peakVelocity = CalculatePeakVelocity();
             var trial = new DesktopSensTrial
             {
@@ -315,7 +317,7 @@ namespace grapher.DesktopSens.Views
                 IsUnderFlick = signedErrorCm < 0.0,
                 IsOverFlick = signedErrorCm > 0.0,
                 FlickAngleDegrees = flickAngle,
-                SignedRotationErrorDegrees = NormalizeSignedAngle(targetAngle - flickAngle),
+                SignedRotationErrorDegrees = signedRotationError,
                 HasMovementMeasurement = actualDistancePx >= 0.25 * _pixelsPerCm,
                 HasRotationMeasurement = actualDistancePx >= 0.25 * _pixelsPerCm,
                 FlickDistanceCm = flickDistanceCm,
