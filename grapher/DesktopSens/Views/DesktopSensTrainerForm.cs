@@ -447,6 +447,7 @@ namespace grapher.DesktopSens.Views
             using (var smallFont = new Font("Arial", 9))
             using (var compassFont = new Font("Arial", 10, FontStyle.Bold))
             {
+                PointF origin = ProjectArenaPoint(_startPos, outerRadius, groundCenterY);
                 g.FillRectangle(background, ClientRectangle);
                 g.FillRectangle(skyBrush, 0, 0, ClientSize.Width, horizonY);
                 g.FillRectangle(floorBrush, 0, horizonY, ClientSize.Width,
@@ -472,7 +473,7 @@ namespace grapher.DesktopSens.Views
                 float baseRadius = (float)(Math.Min(3.0, _maxDistanceCm) / _maxDistanceCm) * outerRadius;
                 DrawArenaCircle(g, ringPen, baseRadius, outerRadius, groundCenterY);
                 g.DrawString("START / SPAWN", smallFont, mutedBrush,
-                    ClientSize.Width / 2f + 8, ClientSize.Height * 0.70f);
+                    origin.X + 8, origin.Y + 8);
 
                 double[] turnRings = { 45.0, 90.0, 135.0 };
                 foreach (double degrees in turnRings)
@@ -495,7 +496,7 @@ namespace grapher.DesktopSens.Views
                     using (var sectorPen = new Pen(_angleZoneCounts[i] > 0
                         ? Color.FromArgb(185, 83, 185, 151)
                         : Color.FromArgb(48, 130, 163, 169), _angleZoneCounts[i] > 0 ? 1.8f : 1f))
-                        g.DrawLine(sectorPen, ClientSize.Width / 2f, groundCenterY, projectedEdge.X, projectedEdge.Y);
+                        g.DrawLine(sectorPen, origin.X, origin.Y, projectedEdge.X, projectedEdge.Y);
 
                     if (_angleZoneCounts[i] > 0)
                     {
@@ -511,14 +512,14 @@ namespace grapher.DesktopSens.Views
                 if (_state != TrialState.SetStartPoint)
                 {
                     using (var startBrush = new SolidBrush(Color.FromArgb(235, 101, 207, 178)))
-                        g.FillEllipse(startBrush, ClientSize.Width / 2f - 6, groundCenterY - 6, 12, 12);
+                        g.FillEllipse(startBrush, origin.X - 6, origin.Y - 6, 12, 12);
                 }
 
                 if (_state == TrialState.Cooldown || _state == TrialState.Flicking ||
                     _state == TrialState.ASDWAdjusting || _state == TrialState.TrialComplete)
                 {
                     PointF target = ProjectArenaPoint(_targetPos, outerRadius, groundCenterY);
-                    g.DrawLine(targetPen, ClientSize.Width / 2f, groundCenterY, target.X, target.Y);
+                    g.DrawLine(targetPen, origin.X, origin.Y, target.X, target.Y);
                     g.DrawLine(targetPen, target.X - 9, target.Y, target.X + 9, target.Y);
                     g.DrawLine(targetPen, target.X, target.Y - 9, target.X, target.Y + 9);
                     g.FillEllipse(targetBrush, target.X - 5, target.Y - 5, 10, 10);
