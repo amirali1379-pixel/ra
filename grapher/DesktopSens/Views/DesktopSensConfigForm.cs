@@ -91,6 +91,9 @@ namespace grapher.DesktopSens.Views
 
                 try
                 {
+                    // Preserve the existing post-3 cm acceleration calibration model.
+                    DesktopSensCalibrator.Calibrate(_profile);
+                    // Directional sensitivity is independently reduced to the four cardinal axes.
                     DirectionalCalibrator.Calibrate(_profile);
                     SaveProfileToDisk();
                     _profileStatus.Text = "4-way profile saved | R " + _profile.RightSensitivityFactor.ToString("0.###", CultureInfo.InvariantCulture) +
