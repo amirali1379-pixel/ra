@@ -130,7 +130,7 @@ namespace grapher.DesktopSens.Views
                 }
                 UpdateArena3D();
             };
-            Cursor.Hide();
+            Cursor.Show();
 
             _startPos = new PointF(ClientSize.Width / 2f, ClientSize.Height / 2f);
             _currentCursorPos = _startPos;
@@ -150,12 +150,13 @@ namespace grapher.DesktopSens.Views
 
         public void OnMouseSample(MouseSample sample)
         {
-            // Keep mouse tracking enabled while placing the setup points. Freeze the virtual
-            // cursor during cooldown and keyboard correction so those phases cannot contaminate
-            // the raw flick measurement.
-            // Point placement uses the real OS cursor and must not be warped by raw-input
-            // recentering. Otherwise SetCursorPos feeds back into selection and the mouse feels stuck.
-            if (_state == TrialState.Cooldown ||
+            // Before the start point is selected, let the real OS cursor move normally.
+            // Do not warp it to the virtual cursor: that pins the pointer at the center
+            // and makes it impossible to choose the start point with the mouse.
+            // Freeze samples during cooldown/correction/completion so they cannot contaminate
+            // the measured flick.
+            if (_state == TrialState.SetStartPoint ||
+                _state == TrialState.Cooldown ||
                 _state == TrialState.ASDWAdjusting ||
                 _state == TrialState.TrialComplete)
                 return;
