@@ -315,6 +315,20 @@ namespace grapher.DesktopSens.Views
             return angle > 180.0 ? angle - 360.0 : angle;
         }
 
+        // Project the trainer's circular movement plane into a perspective 3D arena.
+        // Input and all distance/angle measurements remain in the original physical coordinate
+        // system; this renderer changes only how that arena is displayed.
+        private PointF ProjectArenaPoint(PointF point, float outerRadius, float groundCenterY)
+        {
+            float nx = (point.X - _startPos.X) / Math.Max(1f, outerRadius);
+            float ny = (point.Y - _startPos.Y) / Math.Max(1f, outerRadius);
+            float depth = Math.Max(-0.98f, Math.Min(0.98f, ny));
+            float perspective = 1f / (1f + 0.32f * depth);
+            return new PointF(
+                ClientSize.Width / 2f + nx * outerRadius * perspective,
+                groundCenterY + depth * outerRadius * 0.48f * perspective);
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
@@ -322,106 +336,153 @@ namespace grapher.DesktopSens.Views
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-            using (var background = new LinearGradientBrush(
-                ClientRectangle,
-                Color.FromArgb(19, 21, 24),
-                Color.FromArgb(35, 38, 42),
-                LinearGradientMode.ForwardDiagonal))
+            float outerRadius = (float)(_maxDistanceCm * _pixelsPerCm);
+            float horizonY = ClientSize.Height * 0.27f;
+            float groundCenterY = ClientSize.Height * 0.68f;
+            float sceneRadius = Math.Min(outerRadius, Math.Min(ClientSize.Width * 0.43f,
+                (ClientSize.Height - horizonY) * 0.72f));
+            float ellipseHeight = sceneRadius * 0.48f;
+
+            using (var background = new LinearGradientBrush(ClientRectangle,
+                Color.FromArgb(12, 16, 22), Color.FromArgb(31, 39, 46),
+                LinearGradientMode.Vertical))
+            using (var skyBrush = new LinearGradientBrush(
+                new Rectangle(0, 0, ClientSize.Width, Math.Max(1, (int)horizonY)),
+                Color.FromArgb(10, 14, 20), Color.FromArgb(30, 40, 48),
+                LinearGradientMode.Vertical))
+            using (var floorBrush = new LinearGradientBrush(
+                new Rectangle(0, (int)horizonY, ClientSize.Width,
+                    Math.Max(1, ClientSize.Height - (int)horizonY)),
+                Color.FromArgb(25, 34, 41), Color.FromArgb(10, 14, 19),
+                LinearGradientMode.Vertical))
+            using (var horizonPen = new Pen(Color.FromArgb(95, 94, 139, 148), 1.2f))
+            using (var gridPen = new Pen(Color.FromArgb(35, 123, 158, 164), 1f))
+            using (var zonePen = new Pen(Color.FromArgb(65, 130, 163, 169), 1f))
+            using (var usedZonePen = new Pen(Color.FromArgb(185, 83, 185, 151), 1.8f))
+            using (var ringPen = new Pen(Color.FromArgb(90, 132, 168, 174), 1.1f))
+            using (var outerPen = new Pen(Color.FromArgb(205, 156, 202, 207), 2f))
+            using (var targetPen = new Pen(Color.FromArgb(220, 242, 173, 94), 2f))
+            using (var cursorPen = new Pen(Color.FromArgb(235, 228, 239, 240), 1.6f))
+            using (var textBrush = new SolidBrush(Color.FromArgb(210, 202, 216, 220)))
+            using (var mutedBrush = new SolidBrush(Color.FromArgb(165, 151, 171, 178)))
+            using (var targetBrush = new SolidBrush(Color.FromArgb(240, 242, 173, 94)))
+            using (var cursorBrush = new SolidBrush(Color.FromArgb(235, 104, 218, 183)))
+            using (var statusBrush = new SolidBrush(Color.FromArgb(245, 231, 237, 239)))
             using (var statusFont = new Font("Arial", 16, FontStyle.Bold))
             using (var smallFont = new Font("Arial", 9))
             using (var compassFont = new Font("Arial", 10, FontStyle.Bold))
-            using (var faintGridPen = new Pen(Color.FromArgb(22, 145, 153, 160), 1f))
-            using (var zonePen = new Pen(Color.FromArgb(58, 142, 151, 158), 1f))
-            using (var usedZonePen = new Pen(Color.FromArgb(150, 86, 166, 151), 1.5f))
-            using (var ringPen = new Pen(Color.FromArgb(80, 151, 160, 166), 1f))
-            using (var basePen = new Pen(Color.FromArgb(130, 111, 151, 157), 1.2f))
-            using (var outerPen = new Pen(Color.FromArgb(175, 183, 190, 195), 1.8f))
-            using (var targetPen = new Pen(Color.FromArgb(190, 194, 155, 105), 1.5f))
-            using (var cursorPen = new Pen(Color.FromArgb(220, 220, 224, 226), 1.5f))
-            using (var labelBrush = new SolidBrush(Color.FromArgb(175, 183, 190, 195)))
-            using (var mutedBrush = new SolidBrush(Color.FromArgb(150, 148, 157, 164)))
-            using (var targetBrush = new SolidBrush(Color.FromArgb(230, 201, 166, 119)))
-            using (var centerBrush = new SolidBrush(Color.FromArgb(220, 122, 157, 159)))
-            using (var statusBrush = new SolidBrush(Color.FromArgb(235, 219, 222, 224)))
-            using (var usedZoneBrush = new SolidBrush(Color.FromArgb(220, 119, 180, 164)))
             {
                 g.FillRectangle(background, ClientRectangle);
+                g.FillRectangle(skyBrush, 0, 0, ClientSize.Width, horizonY);
+                g.FillRectangle(floorBrush, 0, horizonY, ClientSize.Width,
+                    ClientSize.Height - horizonY);
+                g.DrawLine(horizonPen, 0, horizonY, ClientSize.Width, horizonY);
 
-                // Subtle crosshair/grid anchors help orientation without making the screen glow.
-                int gridStep = 80;
-                for (int x = ClientSize.Width / 2 % gridStep; x < ClientSize.Width; x += gridStep)
-                    g.DrawLine(faintGridPen, x, 0, x, ClientSize.Height);
-                for (int y = ClientSize.Height / 2 % gridStep; y < ClientSize.Height; y += gridStep)
-                    g.DrawLine(faintGridPen, 0, y, ClientSize.Width, y);
+                // Perspective floor grid: parallel lines converge at the vanishing point.
+                float vanishingX = ClientSize.Width / 2f;
+                for (int i = -12; i <= 12; i++)
+                {
+                    float bottomX = vanishingX + i * ClientSize.Width / 12f;
+                    g.DrawLine(gridPen, vanishingX, horizonY, bottomX, ClientSize.Height);
+                }
+                for (int i = 1; i <= 14; i++)
+                {
+                    float t = i / 14f;
+                    float y = horizonY + (ClientSize.Height - horizonY) * t * t;
+                    g.DrawLine(gridPen, 0, y, ClientSize.Width, y);
+                }
 
-                float outerRadius = (float)(_maxDistanceCm * _pixelsPerCm);
-                // Full 360-degree field; the soft rings are visual guides for the in-game turn.
-                float baseRadius = (float)(Math.Min(3.0, _maxDistanceCm) * _pixelsPerCm);
-                g.DrawEllipse(basePen, _startPos.X - baseRadius, _startPos.Y - baseRadius,
-                    baseRadius * 2, baseRadius * 2);
-                g.DrawString("BASE", smallFont, mutedBrush,
-                    _startPos.X + baseRadius + 4, _startPos.Y + 5);
+                // The playable plane is a 360-degree arena, shown as a perspective ellipse.
+                // The outer boundary still means exactly the 180-degree CS2 turn limit.
+                RectangleF arena = new RectangleF(
+                    ClientSize.Width / 2f - sceneRadius,
+                    groundCenterY - ellipseHeight,
+                    sceneRadius * 2f, ellipseHeight * 2f);
+
+                float baseRadius = (float)(Math.Min(3.0, _maxDistanceCm) / _maxDistanceCm) * sceneRadius;
+                g.DrawEllipse(ringPen, ClientSize.Width / 2f - baseRadius,
+                    groundCenterY - baseRadius * 0.48f, baseRadius * 2, baseRadius * 0.96f);
+                g.DrawString("START / SPAWN", smallFont, mutedBrush,
+                    ClientSize.Width / 2f + 8, groundCenterY + 8);
 
                 double[] turnRings = { 45.0, 90.0, 135.0 };
-                foreach (double turnDegrees in turnRings)
+                foreach (double degrees in turnRings)
                 {
-                    float radius = (float)(turnDegrees / DesktopSensConstants.MaxGameTurnDegrees * outerRadius);
-                    g.DrawEllipse(ringPen, _startPos.X - radius, _startPos.Y - radius,
-                        radius * 2, radius * 2);
-                    g.DrawString(turnDegrees.ToString("0") + "°", smallFont, mutedBrush,
-                        _startPos.X + radius + 4, _startPos.Y + 3);
+                    float r = (float)(degrees / DesktopSensConstants.MaxGameTurnDegrees * sceneRadius);
+                    g.DrawEllipse(ringPen, ClientSize.Width / 2f - r,
+                        groundCenterY - r * 0.48f, r * 2, r * 0.96f);
+                    g.DrawString(degrees.ToString("0") + "°", smallFont, mutedBrush,
+                        ClientSize.Width / 2f + r + 5, groundCenterY - 4);
                 }
-                g.DrawEllipse(outerPen, _startPos.X - outerRadius, _startPos.Y - outerRadius,
-                    outerRadius * 2, outerRadius * 2);
-                g.DrawString("180° END", smallFont, labelBrush,
-                    _startPos.X + outerRadius - 62, _startPos.Y - 18);
+                g.DrawEllipse(outerPen, arena);
+                g.DrawString("180° LIMIT", compassFont, textBrush,
+                    ClientSize.Width / 2f + sceneRadius - 78, groundCenterY - 18);
 
+                // Angular sectors are drawn onto the projected plane, not as a flat screen grid.
                 for (int i = 0; i < DesktopSensConstants.AngularZoneCount; i++)
                 {
-                    double angleRad = i * DesktopSensConstants.AngularZoneSizeDegrees * Math.PI / 180.0;
-                    float xEnd = _startPos.X + (float)(Math.Cos(angleRad) * outerRadius);
-                    float yEnd = _startPos.Y + (float)(Math.Sin(angleRad) * outerRadius);
-                    g.DrawLine(_angleZoneCounts[i] > 0 ? usedZonePen : zonePen,
-                        _startPos.X, _startPos.Y, xEnd, yEnd);
+                    double a = i * DesktopSensConstants.AngularZoneSizeDegrees * Math.PI / 180.0;
+                    PointF edge = new PointF(
+                        _startPos.X + (float)Math.Cos(a) * (float)(_maxDistanceCm * _pixelsPerCm),
+                        _startPos.Y + (float)Math.Sin(a) * (float)(_maxDistanceCm * _pixelsPerCm));
+                    PointF projectedEdge = ProjectArenaPoint(edge,
+                        (float)(_maxDistanceCm * _pixelsPerCm), groundCenterY);
+                    using (var sectorPen = new Pen(_angleZoneCounts[i] > 0
+                        ? Color.FromArgb(185, 83, 185, 151)
+                        : Color.FromArgb(48, 130, 163, 169), _angleZoneCounts[i] > 0 ? 1.8f : 1f))
+                        g.DrawLine(sectorPen, ClientSize.Width / 2f, groundCenterY, projectedEdge.X, projectedEdge.Y);
+
                     if (_angleZoneCounts[i] > 0)
-                        g.DrawString(_angleZoneCounts[i].ToString(), smallFont, usedZoneBrush,
-                            xEnd - 5, yEnd - 14);
+                    {
+                        using (var countBrush = new SolidBrush(Color.FromArgb(230, 100, 225, 177)))
+                            g.DrawString(_angleZoneCounts[i].ToString(), smallFont, countBrush,
+                                projectedEdge.X - 5, projectedEdge.Y - 13);
+                    }
                 }
 
-                // Cardinal labels make it easier to feel the full circular space while turning.
-                g.DrawString("0°", compassFont, labelBrush, _startPos.X + outerRadius + 8, _startPos.Y - 8);
-                g.DrawString("90°", compassFont, labelBrush, _startPos.X - 12, _startPos.Y + outerRadius + 8);
-                g.DrawString("180°", compassFont, labelBrush, _startPos.X - outerRadius - 43, _startPos.Y - 8);
-                g.DrawString("270°", compassFont, labelBrush, _startPos.X - 18, _startPos.Y - outerRadius - 24);
+                g.DrawString("FRONT  0°", compassFont, textBrush,
+                    ClientSize.Width / 2f - 42, groundCenterY - sceneRadius * 0.48f - 24);
+                g.DrawString("RIGHT  90°", smallFont, mutedBrush,
+                    ClientSize.Width / 2f + sceneRadius + 8, groundCenterY - 4);
+                g.DrawString("BACK  180°", smallFont, mutedBrush,
+                    ClientSize.Width / 2f - sceneRadius - 76, groundCenterY - 4);
+                g.DrawString("LEFT  270°", smallFont, mutedBrush,
+                    ClientSize.Width / 2f - 34, groundCenterY + sceneRadius * 0.48f + 8);
 
                 if (_state != TrialState.SetStartPoint)
-                    g.FillEllipse(centerBrush, _startPos.X - 5, _startPos.Y - 5, 10, 10);
+                {
+                    using (var startBrush = new SolidBrush(Color.FromArgb(235, 101, 207, 178)))
+                        g.FillEllipse(startBrush, ClientSize.Width / 2f - 6, groundCenterY - 6, 12, 12);
+                }
+
                 if (_state == TrialState.Cooldown || _state == TrialState.Flicking ||
                     _state == TrialState.ASDWAdjusting || _state == TrialState.TrialComplete)
                 {
-                    g.FillEllipse(targetBrush, _targetPos.X - 5, _targetPos.Y - 5, 10, 10);
-                    g.DrawLine(targetPen, _startPos, _targetPos);
+                    PointF target = ProjectArenaPoint(_targetPos, outerRadius, groundCenterY);
+                    g.DrawLine(targetPen, ClientSize.Width / 2f, groundCenterY, target.X, target.Y);
+                    g.DrawLine(targetPen, target.X - 9, target.Y, target.X + 9, target.Y);
+                    g.DrawLine(targetPen, target.X, target.Y - 9, target.X, target.Y + 9);
+                    g.FillEllipse(targetBrush, target.X - 5, target.Y - 5, 10, 10);
                 }
 
-                g.DrawLine(cursorPen, _currentCursorPos.X - 9, _currentCursorPos.Y,
-                    _currentCursorPos.X + 9, _currentCursorPos.Y);
-                g.DrawLine(cursorPen, _currentCursorPos.X, _currentCursorPos.Y - 9,
-                    _currentCursorPos.X, _currentCursorPos.Y + 9);
-                g.DrawEllipse(cursorPen, _currentCursorPos.X - 4, _currentCursorPos.Y - 4, 8, 8);
+                PointF cursor = ProjectArenaPoint(_currentCursorPos, outerRadius, groundCenterY);
+                g.DrawLine(cursorPen, cursor.X - 9, cursor.Y, cursor.X + 9, cursor.Y);
+                g.DrawLine(cursorPen, cursor.X, cursor.Y - 9, cursor.X, cursor.Y + 9);
+                g.FillEllipse(cursorBrush, cursor.X - 4, cursor.Y - 4, 8, 8);
 
                 string status;
                 switch (_state)
                 {
-                    case TrialState.SetStartPoint: status = "1/2: Click to center the start point"; break;
-                    case TrialState.SetTargetPoint: status = "2/2: Choose any direction in the 360° field"; break;
+                    case TrialState.SetStartPoint: status = "1/2: Click to enter the 3D arena"; break;
+                    case TrialState.SetTargetPoint: status = "2/2: Select any direction around you (360°)"; break;
                     case TrialState.Cooldown: status = "Get ready (3 seconds)..."; break;
                     case TrialState.Flicking: status = "Flick to the target, then click to record landing"; break;
-                    case TrialState.ASDWAdjusting: status = "Adjust with W/A/S/D, then press SPACE to save trial"; break;
-                    default: status = "Trial saved. Click to start a new trial (ESC to exit)."; break;
+                    case TrialState.ASDWAdjusting: status = "Adjust with W/A/S/D, then press SPACE to save"; break;
+                    default: status = "Trial saved. Click to start another trial (ESC to exit)."; break;
                 }
                 g.DrawString(status, statusFont, statusBrush, 20, 20);
-                g.DrawString("180° turn boundary | 360° directional field | Trials: " +
-                    _profile.Trials.Count, smallFont, labelBrush, 20, 48);
+                g.DrawString("PERSPECTIVE 3D ARENA  |  360° direction space  |  180° CS2 turn cap  |  Trials: " +
+                    _profile.Trials.Count, smallFont, textBrush, 20, 48);
             }
         }
     }
