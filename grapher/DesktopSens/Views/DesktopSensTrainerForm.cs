@@ -318,13 +318,16 @@ namespace grapher.DesktopSens.Views
 
         private void SyncCursorPositionToCamera()
         {
-            // Visualize the current yaw on a circular 360-degree map. Measurement angles
-            // are kept separately so crossing 0/360 never relocates the recorded landing.
-            double yawRadians = NormalizeAngle(_cameraYawDegrees - _calibrationYawDegrees) * Math.PI / 180.0;
+            // Keep the landing cursor aligned with the actual view angles. The previous
+            // yaw-only circle projection changed both X and Y, so a purely horizontal
+            // mouse movement made the cursor drift down/up around the circle.
+            // Yaw controls horizontal position; relative pitch controls vertical position.
+            double yawRadians = NormalizeSignedAngle(_cameraYawDegrees - _calibrationYawDegrees) * Math.PI / 180.0;
+            double pitchRadians = (_cameraPitchDegrees - _calibrationPitchDegrees) * Math.PI / 180.0;
             double arenaRadiusPx = Math.Max(1.0, Math.Min(ClientSize.Width, ClientSize.Height) * 0.42);
             _currentCursorPos = new PointF(
                 _startPos.X + (float)(Math.Sin(yawRadians) * arenaRadiusPx),
-                _startPos.Y - (float)(Math.Cos(yawRadians) * arenaRadiusPx));
+                _startPos.Y - (float)(Math.Sin(pitchRadians) * arenaRadiusPx));
         }
 
         private void FinishTrial()
