@@ -61,7 +61,48 @@ namespace grapher.DesktopSens.Views
                 DrawLine(Vector3.Zero, new Vector3(Target.X, 0.05f, -Target.Y), 1f, 0.57f, 0.25f);
             }
             DrawMarker(new Vector3(CursorWorld.X, 0.08f, -CursorWorld.Y), 0.13f, 0.25f, 0.95f, 0.72f);
+            DrawScreenCrosshair();
             SwapBuffers();
+        }
+
+
+        // Draw a fixed screen-space reticle after the perspective scene so it stays
+        // centered regardless of camera rotation or the world-space cursor marker.
+        private void DrawScreenCrosshair()
+        {
+            GL.Disable(EnableCap.DepthTest);
+            GL.MatrixMode(MatrixMode.Projection);
+            GL.PushMatrix();
+            GL.LoadIdentity();
+            GL.Ortho(0, Width, Height, 0, -1, 1);
+            GL.MatrixMode(MatrixMode.Modelview);
+            GL.PushMatrix();
+            GL.LoadIdentity();
+
+            float cx = Width * 0.5f;
+            float cy = Height * 0.5f;
+            const float arm = 9f;
+            const float gap = 4f;
+
+            GL.LineWidth(2f);
+            GL.Begin(PrimitiveType.Lines);
+            GL.Color4(0f, 0f, 0f, 0.9f);
+            GL.Vertex2(cx - arm - 1f, cy); GL.Vertex2(cx - gap + 1f, cy);
+            GL.Vertex2(cx + gap - 1f, cy); GL.Vertex2(cx + arm + 1f, cy);
+            GL.Vertex2(cx, cy - arm - 1f); GL.Vertex2(cx, cy - gap + 1f);
+            GL.Vertex2(cx, cy + gap - 1f); GL.Vertex2(cx, cy + arm + 1f);
+            GL.Color4(0.9f, 0.98f, 1f, 1f);
+            GL.Vertex2(cx - arm, cy); GL.Vertex2(cx - gap, cy);
+            GL.Vertex2(cx + gap, cy); GL.Vertex2(cx + arm, cy);
+            GL.Vertex2(cx, cy - arm); GL.Vertex2(cx, cy - gap);
+            GL.Vertex2(cx, cy + gap); GL.Vertex2(cx, cy + arm);
+            GL.End();
+
+            GL.PopMatrix();
+            GL.MatrixMode(MatrixMode.Projection);
+            GL.PopMatrix();
+            GL.MatrixMode(MatrixMode.Modelview);
+            GL.Enable(EnableCap.DepthTest);
         }
 
         private void DrawGround()
