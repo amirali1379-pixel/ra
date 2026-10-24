@@ -151,7 +151,9 @@ namespace grapher.DesktopSens.Views
                 _startPos = new PointF(ClientSize.Width / 2f, ClientSize.Height / 2f);
                 CaptureCalibrationPlane();
                 _currentCursorPos = _startPos;
-                MoveSystemCursorToCanvas();
+                // Let Windows own the cursor while the user chooses the second point.
+                // Raw-input mode intentionally does not move the virtual cursor in this state.
+                Cursor.Show();
                 _state = TrialState.SetTargetPoint;
             }
             else if (_state == TrialState.SetTargetPoint)
@@ -173,6 +175,8 @@ namespace grapher.DesktopSens.Views
 
                 _rawSamples.Clear();
                 _currentCursorPos = _startPos;
+                // Re-enter hidden/raw-input aiming only after the target has been selected.
+                Cursor.Hide();
                 MoveSystemCursorToCanvas();
                 _state = TrialState.Cooldown;
                 _cooldownTimer.Start();
@@ -187,6 +191,7 @@ namespace grapher.DesktopSens.Views
             else if (_state == TrialState.TrialComplete)
             {
                 _state = TrialState.SetStartPoint;
+                Cursor.Show();
                 _rawSamples.Clear();
                 _startPos = PointF.Empty;
                 _targetPos = PointF.Empty;
