@@ -284,6 +284,8 @@ namespace grapher.DesktopSens.Views
         {
             _currentCursorPos.X = Math.Max(0, Math.Min(ClientSize.Width - 1, _currentCursorPos.X));
             _currentCursorPos.Y = Math.Max(0, Math.Min(ClientSize.Height - 1, _currentCursorPos.Y));
+            if (_state != TrialState.SetStartPoint)
+                _currentCursorPos = ClampToTurnCircle(_currentCursorPos);
         }
 
         private void MoveSystemCursorToCanvas()
