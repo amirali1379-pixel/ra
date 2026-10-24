@@ -120,6 +120,8 @@ namespace grapher.DesktopSens.Views
             _cameraYawDegrees += sample.DX * degreesPerCount;
             _cameraPitchDegrees = Math.Max(-20f, Math.Min(35f,
                 _cameraPitchDegrees - sample.DY * degreesPerCount));
+            if (_state == TrialState.Flicking)
+                SyncCursorPositionToCamera();
             ClampCursorToCanvas();
 
             if (_state == TrialState.Flicking)
