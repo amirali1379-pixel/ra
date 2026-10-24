@@ -18,9 +18,9 @@ namespace grapher.DesktopSens.Models
             int distanceIndex = ZoneCalculations.DistanceToZoneIndex(distanceCm);
             int cellIndex = DesktopSensProfile.GetCellIndex(angleIndex, distanceIndex);
 
-            // Sensitivity is per axis (32 angular zones). It remains the base multiplier at
-            // every distance; acceleration is added only after the first 3 cm.
-            double baseFactor = ReadFactor(profile.SensitivityFactor, angleIndex, 1.0);
+            // Directional base sensitivity is cardinal: 0=right, 1=down, 2=left, 3=up.
+            // The existing distance-zone acceleration remains applied only after the first 3 cm.
+            double baseFactor = GetDirectionalFactor(profile, angleDegrees);
             if (distanceCm <= DesktopSensConstants.MicroZoneMaxCm)
                 return baseFactor;
 
@@ -43,6 +43,26 @@ namespace grapher.DesktopSens.Models
 
             double correction = profile.CellRotationOffsetDegrees[cellIndex];
             return double.IsNaN(correction) || double.IsInfinity(correction) ? 0.0 : correction;
+        }
+
+        private static double GetDirectionalFactor(DesktopSensProfile profile, double angleDegrees)
+        {
+            if (double.IsNaN(angleDegrees) || double.IsInfinity(angleDegrees)) return 1.0;
+            angleDegrees %= 360.0;
+            if (angleDegrees < 0.0) angleDegrees += 360.0;
+            int direction = ((int)Math.Floor((angleDegrees + 45.0) / 90.0)) % 4;
+            switch (direction)
+            {
+                case 0: return ReadPositive(profile.RightSensitivityFactor);
+                case 1: return ReadPositive(profile.DownSensitivityFactor);
+                case 2: return ReadPositive(profile.LeftSensitivityFactor);
+                default: return ReadPositive(profile.UpSensitivityFactor);
+            }
+        }
+
+        private static double ReadPositive(double value)
+        {
+            return double.IsNaN(value) || double.IsInfinity(value) || value <= 0.0 ? 1.0 : value;
         }
 
         private static double ReadFactor(double[] values, int index, double fallback)
