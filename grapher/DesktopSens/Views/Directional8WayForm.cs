@@ -87,6 +87,10 @@ namespace grapher.DesktopSens.Views
 
         private bool TryReadMultipliers(out double right, out double left, out double up, out double down)
         {
+            // Initialize every out parameter before short-circuit evaluation.
+            // If an earlier value is invalid, later TryReadPositive calls won't run.
+            right = left = up = down = 0.0;
+
             return TryReadPositive(_rightBox.Text, out right) &&
                    TryReadPositive(_leftBox.Text, out left) &&
                    TryReadPositive(_upBox.Text, out up) &&
