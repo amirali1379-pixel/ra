@@ -30,6 +30,12 @@ namespace grapher.DesktopSens.Views
         private readonly float _pixelsPerCm;
         private readonly int[] _angleZoneCounts = new int[DesktopSensConstants.AngularZoneCount];
         private readonly int[] _distanceZoneCounts = new int[DesktopSensConstants.DistanceZoneCount];
+        private float _cameraYawDegrees;
+        private float _cameraPitchDegrees = 18f;
+        private bool _cameraDragging;
+        private Point _cameraDragOrigin;
+        private float _cameraDragYaw;
+        private float _cameraDragPitch;
 
         [DllImport("user32.dll")]
         private static extern bool SetCursorPos(int X, int Y);
@@ -315,20 +321,90 @@ namespace grapher.DesktopSens.Views
             return angle > 180.0 ? angle - 360.0 : angle;
         }
 
-        // Project the trainer's circular movement plane into a perspective 3D arena.
-        // Input and all distance/angle measurements remain in the original physical coordinate
-        // system; this renderer changes only how that arena is displayed.
+        // Project the trainer's world-space ground plane through a rotatable perspective camera.
         private PointF ProjectArenaPoint(PointF point, float outerRadius, float groundCenterY)
         {
-            float nx = (point.X - _startPos.X) / Math.Max(1f, outerRadius);
-            float ny = (point.Y - _startPos.Y) / Math.Max(1f, outerRadius);
-            float displayRadius = Math.Min(outerRadius, Math.Min(ClientSize.Width * 0.43f,
-                (ClientSize.Height - ClientSize.Height * 0.27f) * 0.72f));
-            float depth = Math.Max(-0.98f, Math.Min(0.98f, ny));
-            float perspective = 1f / (1f + 0.32f * depth);
-            return new PointF(
-                ClientSize.Width / 2f + nx * displayRadius * perspective,
-                groundCenterY + depth * displayRadius * 0.48f * perspective);
+            float radius = Math.Max(1f, outerRadius);
+            double worldX = (point.X - _startPos.X) / radius;
+            double worldZ = -(point.Y - _startPos.Y) / radius;
+            double yaw = _cameraYawDegrees * Math.PI / 180.0;
+            double pitch = _cameraPitchDegrees * Math.PI / 180.0;
+            const double cameraDistance = 3.2;
+            const double cameraHeight = 1.15;
+            double camX = Math.Sin(yaw) * cameraDistance;
+            double camZ = -Math.Cos(yaw) * cameraDistance;
+            double dx = worldX - camX;
+            double dz = worldZ - camZ;
+            double cameraX = dx * Math.Cos(yaw) - dz * Math.Sin(yaw);
+            double depthBeforePitch = dx * Math.Sin(yaw) + dz * Math.Cos(yaw);
+            double cameraY = -cameraHeight;
+            double depth = depthBeforePitch * Math.Cos(pitch) - cameraY * Math.Sin(pitch);
+            double vertical = cameraY * Math.Cos(pitch) + depthBeforePitch * Math.Sin(pitch);
+            if (depth < 0.08) depth = 0.08;
+            double focal = Math.Min(ClientSize.Width, ClientSize.Height) * 1.05;
+            float horizonY = ClientSize.Height * 0.27f;
+            return new PointF((float)(ClientSize.Width * 0.5 + cameraX * focal / depth),
+                (float)(horizonY - vertical * focal / depth));
+        }
+
+        private void DrawArenaCircle(Graphics g, Pen pen, float radiusPixels, float outerRadius, float groundCenterY)
+        {
+            const int segments = 96;
+            PointF previous = PointF.Empty;
+            for (int i = 0; i <= segments; i++)
+            {
+                double a = i * Math.PI * 2.0 / segments;
+                PointF worldPoint = new PointF(_startPos.X + (float)Math.Cos(a) * radiusPixels,
+                    _startPos.Y - (float)Math.Sin(a) * radiusPixels);
+                PointF projected = ProjectArenaPoint(worldPoint, outerRadius, groundCenterY);
+                if (i > 0 && IsOnScreen(previous) && IsOnScreen(projected))
+                    g.DrawLine(pen, previous, projected);
+                previous = projected;
+            }
+        }
+
+        private bool IsOnScreen(PointF p)
+        {
+            return !float.IsNaN(p.X) && !float.IsInfinity(p.X) &&
+                !float.IsNaN(p.Y) && !float.IsInfinity(p.Y) &&
+                Math.Abs(p.X) < ClientSize.Width * 8f && Math.Abs(p.Y) < ClientSize.Height * 8f;
+        }
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Right)
+            {
+                _cameraDragging = true;
+                _cameraDragOrigin = e.Location;
+                _cameraDragYaw = _cameraYawDegrees;
+                _cameraDragPitch = _cameraPitchDegrees;
+                Capture = true;
+                return;
+            }
+            base.OnMouseDown(e);
+            if (e.Button != MouseButtons.Left) return;
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            if (_cameraDragging)
+            {
+                _cameraYawDegrees = _cameraDragYaw + (e.X - _cameraDragOrigin.X) * 0.45f;
+                _cameraPitchDegrees = Math.Max(5f, Math.Min(65f,
+                    _cameraDragPitch + (e.Y - _cameraDragOrigin.Y) * 0.25f));
+                Invalidate();
+                return;
+            }
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Right && _cameraDragging)
+            {
+                _cameraDragging = false;
+                Capture = false;
+                return;
+            }
+            base.OnMouseUp(e);
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -380,45 +456,35 @@ namespace grapher.DesktopSens.Views
                     ClientSize.Height - horizonY);
                 g.DrawLine(horizonPen, 0, horizonY, ClientSize.Width, horizonY);
 
-                // Perspective floor grid: parallel lines converge at the vanishing point.
-                float vanishingX = ClientSize.Width / 2f;
-                for (int i = -12; i <= 12; i++)
+                // World-space floor grid, projected through the rotatable 3D camera.
+                for (int i = -10; i <= 10; i++)
                 {
-                    float bottomX = vanishingX + i * ClientSize.Width / 12f;
-                    g.DrawLine(gridPen, vanishingX, horizonY, bottomX, ClientSize.Height);
+                    PointF a = ProjectArenaPoint(new PointF(_startPos.X + i * outerRadius / 10f, _startPos.Y - outerRadius), outerRadius, groundCenterY);
+                    PointF b = ProjectArenaPoint(new PointF(_startPos.X + i * outerRadius / 10f, _startPos.Y + outerRadius), outerRadius, groundCenterY);
+                    if (IsOnScreen(a) && IsOnScreen(b)) g.DrawLine(gridPen, a, b);
                 }
-                for (int i = 1; i <= 14; i++)
+                for (int i = -10; i <= 10; i++)
                 {
-                    float t = i / 14f;
-                    float y = horizonY + (ClientSize.Height - horizonY) * t * t;
-                    g.DrawLine(gridPen, 0, y, ClientSize.Width, y);
+                    PointF a = ProjectArenaPoint(new PointF(_startPos.X - outerRadius, _startPos.Y + i * outerRadius / 10f), outerRadius, groundCenterY);
+                    PointF b = ProjectArenaPoint(new PointF(_startPos.X + outerRadius, _startPos.Y + i * outerRadius / 10f), outerRadius, groundCenterY);
+                    if (IsOnScreen(a) && IsOnScreen(b)) g.DrawLine(gridPen, a, b);
                 }
 
                 // The playable plane is a 360-degree arena, shown as a perspective ellipse.
                 // The outer boundary still means exactly the 180-degree CS2 turn limit.
-                RectangleF arena = new RectangleF(
-                    ClientSize.Width / 2f - sceneRadius,
-                    groundCenterY - ellipseHeight,
-                    sceneRadius * 2f, ellipseHeight * 2f);
-
-                float baseRadius = (float)(Math.Min(3.0, _maxDistanceCm) / _maxDistanceCm) * sceneRadius;
-                g.DrawEllipse(ringPen, ClientSize.Width / 2f - baseRadius,
-                    groundCenterY - baseRadius * 0.48f, baseRadius * 2, baseRadius * 0.96f);
+                float baseRadius = (float)(Math.Min(3.0, _maxDistanceCm) / _maxDistanceCm) * outerRadius;
+                DrawArenaCircle(g, ringPen, baseRadius, outerRadius, groundCenterY);
                 g.DrawString("START / SPAWN", smallFont, mutedBrush,
-                    ClientSize.Width / 2f + 8, groundCenterY + 8);
+                    ClientSize.Width / 2f + 8, ClientSize.Height * 0.70f);
 
                 double[] turnRings = { 45.0, 90.0, 135.0 };
                 foreach (double degrees in turnRings)
                 {
-                    float r = (float)(degrees / DesktopSensConstants.MaxGameTurnDegrees * sceneRadius);
-                    g.DrawEllipse(ringPen, ClientSize.Width / 2f - r,
-                        groundCenterY - r * 0.48f, r * 2, r * 0.96f);
-                    g.DrawString(degrees.ToString("0") + "°", smallFont, mutedBrush,
-                        ClientSize.Width / 2f + r + 5, groundCenterY - 4);
+                    float r = (float)(degrees / DesktopSensConstants.MaxGameTurnDegrees * outerRadius);
+                    DrawArenaCircle(g, ringPen, r, outerRadius, groundCenterY);
                 }
-                g.DrawEllipse(outerPen, arena);
-                g.DrawString("180° LIMIT", compassFont, textBrush,
-                    ClientSize.Width / 2f + sceneRadius - 78, groundCenterY - 18);
+                DrawArenaCircle(g, outerPen, outerRadius, outerRadius, groundCenterY);
+                g.DrawString("180° TURN DISTANCE LIMIT", compassFont, textBrush, 20, ClientSize.Height - 52);
 
                 // Angular sectors are drawn onto the projected plane, not as a flat screen grid.
                 for (int i = 0; i < DesktopSensConstants.AngularZoneCount; i++)
@@ -442,14 +508,8 @@ namespace grapher.DesktopSens.Views
                     }
                 }
 
-                g.DrawString("FRONT  0°", compassFont, textBrush,
-                    ClientSize.Width / 2f - 42, groundCenterY - sceneRadius * 0.48f - 24);
-                g.DrawString("RIGHT  90°", smallFont, mutedBrush,
-                    ClientSize.Width / 2f + sceneRadius + 8, groundCenterY - 4);
-                g.DrawString("BACK  180°", smallFont, mutedBrush,
-                    ClientSize.Width / 2f - sceneRadius - 76, groundCenterY - 4);
-                g.DrawString("LEFT  270°", smallFont, mutedBrush,
-                    ClientSize.Width / 2f - 34, groundCenterY + sceneRadius * 0.48f + 8);
+                g.DrawString("CAMERA: right-drag to look around 360°", smallFont, textBrush, 20, 72);
+                g.DrawString("Yaw " + _cameraYawDegrees.ToString("0") + "°   Pitch " + _cameraPitchDegrees.ToString("0") + "°", smallFont, mutedBrush, 20, 90);
 
                 if (_state != TrialState.SetStartPoint)
                 {
@@ -483,7 +543,7 @@ namespace grapher.DesktopSens.Views
                     default: status = "Trial saved. Click to start another trial (ESC to exit)."; break;
                 }
                 g.DrawString(status, statusFont, statusBrush, 20, 20);
-                g.DrawString("PERSPECTIVE 3D ARENA  |  360° direction space  |  180° CS2 turn cap  |  Trials: " +
+                g.DrawString("3D WORLD CAMERA  |  360° LOOK  |  180° CS2 TURN DISTANCE CAP  |  Trials: " +
                     _profile.Trials.Count, smallFont, textBrush, 20, 48);
             }
         }
