@@ -16,6 +16,7 @@ namespace grapher.DesktopSens.Views
         private readonly Stopwatch _trialStopwatch = new Stopwatch();
         private readonly Timer _cooldownTimer;
         private readonly DesktopSensArena3DControl _arena3D;
+        private readonly Label _hud;
 
         private enum TrialState { SetStartPoint, SetTargetPoint, Cooldown, Flicking, ASDWAdjusting, TrialComplete }
         private TrialState _state = TrialState.SetStartPoint;
@@ -60,6 +61,11 @@ namespace grapher.DesktopSens.Views
             _arena3D = new DesktopSensArena3DControl { Dock = DockStyle.Fill, Radius = (float)_maxDistanceCm };
             Controls.Add(_arena3D);
             _arena3D.SendToBack();
+            _hud = new Label { AutoSize = true, Location = new Point(20, 20), Padding = new Padding(10),
+                BackColor = Color.FromArgb(220, 12, 16, 22), ForeColor = Color.Gainsboro,
+                Font = new Font("Segoe UI", 11f, FontStyle.Bold) };
+            Controls.Add(_hud);
+            _hud.BringToFront();
             _arena3D.MouseDown += (s, e) => OnMouseDown(e);
             _arena3D.MouseMove += (s, e) => OnMouseMove(e);
             _arena3D.MouseUp += (s, e) => OnMouseUp(e);
@@ -429,6 +435,19 @@ namespace grapher.DesktopSens.Views
                 _state == TrialState.ASDWAdjusting || _state == TrialState.TrialComplete;
             _arena3D.StatusText = _state.ToString();
             _arena3D.TrialCount = _profile.Trials.Count;
+            string instruction;
+            switch (_state)
+            {
+                case TrialState.SetStartPoint: instruction = "Click to begin  |  Right-drag: look around  |  ESC: exit"; break;
+                case TrialState.SetTargetPoint: instruction = "Click a target on the ground plane  |  Right-drag: look around"; break;
+                case TrialState.Cooldown: instruction = "Get ready…"; break;
+                case TrialState.Flicking: instruction = "Flick to the target, then click to record landing"; break;
+                case TrialState.ASDWAdjusting: instruction = "W/A/S/D to adjust  |  SPACE to save"; break;
+                default: instruction = "Trial saved  |  Click to start the next trial"; break;
+            }
+            _hud.Text = "DESKTOPSENS 3D  |  Yaw " + _cameraYawDegrees.ToString("0") + "°  Pitch " +
+                _cameraPitchDegrees.ToString("0") + "°  |  Trials " + _profile.Trials.Count + Environment.NewLine +
+                instruction + Environment.NewLine + "OpenGL perspective world · 360° camera · calibrated 180° turn-distance limit";
             _arena3D.Invalidate();
         }
 
