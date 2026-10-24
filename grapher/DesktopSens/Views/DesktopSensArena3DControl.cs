@@ -16,6 +16,7 @@ namespace grapher.DesktopSens.Views
         internal Vector3 StartPoint { get; set; }
         internal Vector3 TargetPoint { get; set; }
         internal Vector3 CalibrationRight { get; set; } = Vector3.UnitX;
+        internal Vector3 CalibrationForward { get; set; } = new Vector3(0f, 0f, -1f);
         internal Vector3 CalibrationUp { get; set; } = Vector3.UnitY;
         internal bool ShowStart { get; set; }
         internal bool ShowTarget { get; set; }
@@ -56,6 +57,7 @@ namespace grapher.DesktopSens.Views
             GL.LoadMatrix(ref view);
 
             DrawIndoorRange();
+            DrawAzimuthTicks();
             if (ShowStart)
                 DrawCalibrationCircle(StartPoint, CalibrationRight, CalibrationUp, 0.20f, 0.25f, 0.95f, 0.55f);
             if (ShowTarget)
@@ -154,6 +156,32 @@ namespace grapher.DesktopSens.Views
                 GL.Color3(0.34f, 0.37f, 0.37f);
                 GL.Vertex3(x, 7.8f, z);
                 GL.Vertex3(x * 0.92f, 7.8f, z * 0.92f);
+            }
+            GL.End();
+        }
+
+        // Azimuth graduations around the cylindrical arena. 0° is the calibration
+        // forward direction; major marks every 30° make the full 360° reference visible.
+        private void DrawAzimuthTicks()
+        {
+            Vector3 forward = Vector3.Normalize(CalibrationForward);
+            Vector3 right = Vector3.Normalize(CalibrationRight);
+            const float innerRadius = 20.5f;
+            const float outerMinor = 21.0f;
+            const float outerMajor = 21.8f;
+            GL.LineWidth(2f);
+            GL.Begin(PrimitiveType.Lines);
+            for (int degree = 0; degree < 360; degree += 10)
+            {
+                double radians = degree * Math.PI / 180.0;
+                Vector3 direction = Vector3.Normalize(
+                    forward * (float)Math.Cos(radians) + right * (float)Math.Sin(radians));
+                float outer = degree % 30 == 0 ? outerMajor : outerMinor;
+                if (degree == 0) GL.Color3(0.25f, 0.95f, 0.62f);
+                else if (degree % 30 == 0) GL.Color3(0.95f, 0.72f, 0.25f);
+                else GL.Color3(0.36f, 0.48f, 0.53f);
+                GL.Vertex3(direction.X * innerRadius, 0.03f, direction.Z * innerRadius);
+                GL.Vertex3(direction.X * outer, 0.03f, direction.Z * outer);
             }
             GL.End();
         }
