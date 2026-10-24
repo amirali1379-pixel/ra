@@ -470,8 +470,8 @@ namespace grapher.DesktopSens.Views
 
                 // The playable plane is a 360-degree arena, shown as a perspective ellipse.
                 // The outer boundary still means exactly the 180-degree CS2 turn limit.
-                float baseRadius = (float)(Math.Min(3.0, _maxDistanceCm) / _maxDistanceCm) * outerRadius;
-                DrawArenaCircle(g, ringPen, baseRadius, outerRadius, groundCenterY);
+                // Do not draw a separate tiny base circle: the spawn is the projected origin,
+                // and all distance rings share the same calibrated world-space scale.
                 g.DrawString("START / SPAWN", smallFont, mutedBrush,
                     origin.X + 8, origin.Y + 8);
 
