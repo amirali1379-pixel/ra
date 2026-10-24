@@ -23,9 +23,10 @@ namespace grapher.DesktopSens.Views
         private PointF _targetPos;
         private PointF _currentCursorPos;
         private PointF _rawLandedPos;
-        // Scale the virtual canvas so a 100 cm target can fit on the shorter screen axis.
-        // Keep the same scale for raw-input conversion and saved trial metadata.
-        private readonly float _pixelsPerCm = Math.Min(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height) / 105.0f;
+        // The circular trainer radius represents exactly a 180-degree CS2 turn.
+        // The conversion depends on the current mouse DPI and CS2 sensitivity.
+        private readonly double _maxDistanceCm;
+        private readonly float _pixelsPerCm;
         private readonly int[] _angleZoneCounts = new int[DesktopSensConstants.AngularZoneCount];
         private readonly int[] _distanceZoneCounts = new int[DesktopSensConstants.DistanceZoneCount];
 
@@ -39,6 +40,11 @@ namespace grapher.DesktopSens.Views
                 _profile.MouseDPI > DesktopSensConstants.MaxMouseDPI)
                 throw new ArgumentOutOfRangeException(nameof(profile), "Mouse DPI is outside the supported range.");
 
+            _maxDistanceCm = ZoneCalculations.MaxDistanceCmForTurnDegrees(
+                _profile.MouseDPI, _profile.UserInputGameSensitivity);
+            _pixelsPerCm = (float)(Math.Min(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height) /
+                (2.0 * _maxDistanceCm));
+
             FormBorderStyle = FormBorderStyle.None;
             WindowState = FormWindowState.Maximized;
             BackColor = Color.FromArgb(30, 30, 30);
@@ -46,7 +52,8 @@ namespace grapher.DesktopSens.Views
             KeyPreview = true;
             Cursor.Hide();
 
-            _currentCursorPos = new PointF(ClientSize.Width / 2f, ClientSize.Height / 2f);
+            _startPos = new PointF(ClientSize.Width / 2f, ClientSize.Height / 2f);
+            _currentCursorPos = _startPos;
             MoveSystemCursorToCanvas();
 
             _cooldownTimer = new Timer { Interval = 3000 };
@@ -92,35 +99,18 @@ namespace grapher.DesktopSens.Views
 
             if (_state == TrialState.SetStartPoint)
             {
-                _startPos = clickedPoint;
+                // Keep the origin centered so every direction in the 360-degree field is reachable.
+                _startPos = new PointF(ClientSize.Width / 2f, ClientSize.Height / 2f);
                 _currentCursorPos = _startPos;
                 MoveSystemCursorToCanvas();
                 _state = TrialState.SetTargetPoint;
             }
             else if (_state == TrialState.SetTargetPoint)
             {
-                // Snap each training target to its nearest cardinal axis so every saved
-                // observation calibrates exactly one of RawAccel's four native directions.
-                double targetDx = clickedPoint.X - _startPos.X;
-                double targetDy = clickedPoint.Y - _startPos.Y;
-                double targetDistancePx = Math.Sqrt(targetDx * targetDx + targetDy * targetDy);
-                if (Math.Abs(targetDx) >= Math.Abs(targetDy))
-                {
-                    _targetPos = new PointF(
-                        _startPos.X + (targetDx < 0.0 ? -1.0f : 1.0f) * (float)targetDistancePx,
-                        _startPos.Y);
-                }
-                else
-                {
-                    _targetPos = new PointF(
-                        _startPos.X,
-                        _startPos.Y + (targetDy < 0.0 ? -1.0f : 1.0f) * (float)targetDistancePx);
-                }
-
-                // A cardinal snap can extend beyond an edge when the start point is near a corner.
-                // Clamp the snapped point back to the canvas while preserving its cardinal axis.
-                _targetPos.X = Math.Max(0, Math.Min(ClientSize.Width - 1, _targetPos.X));
-                _targetPos.Y = Math.Max(0, Math.Min(ClientSize.Height - 1, _targetPos.Y));
+                // Preserve the clicked angle instead of snapping to four directions.
+                // Clamp the target to the 180-degree turn circle so training never extrapolates
+                // beyond the configured end point.
+                _targetPos = ClampToTurnCircle(clickedPoint);
 
                 double targetDistanceCm = Distance(_startPos, _targetPos) / _pixelsPerCm;
                 if (targetDistanceCm < 0.25)
@@ -240,10 +230,11 @@ namespace grapher.DesktopSens.Views
                 DurationMs = _trialStopwatch.Elapsed.TotalMilliseconds,
                 PeakVelocityPxPerSec = peakVelocity,
                 AngleZoneIndex = ZoneCalculations.AngleToZoneIndex(targetAngle),
-                DistanceZoneIndex = ZoneCalculations.DistanceToZoneIndex(targetDistanceCm),
+                DistanceZoneIndex = ZoneCalculations.DistanceToZoneIndex(targetDistanceCm, _maxDistanceCm),
                 CompletionMode = FlickCompletionMode.Click,
                 CompletionTimestamp = _rawSamples.Count > 0 ? _rawSamples[_rawSamples.Count - 1].Timestamp : 0,
                 MouseDPI = _profile.MouseDPI,
+                GameSensitivity = _profile.UserInputGameSensitivity,
                 EffectivePollingRateHz = _profile.PollingRateHz,
                 CanvasPixelsPerCm = _pixelsPerCm
             };
@@ -270,6 +261,23 @@ namespace grapher.DesktopSens.Views
                 if (velocity > peak) peak = velocity;
             }
             return peak;
+        }
+
+        private PointF ClampToTurnCircle(PointF point)
+        {
+            double dx = point.X - _startPos.X;
+            double dy = point.Y - _startPos.Y;
+            double distance = Math.Sqrt(dx * dx + dy * dy);
+            double maxRadius = _maxDistanceCm * _pixelsPerCm;
+            if (distance > maxRadius && distance > 0.0)
+            {
+                double scale = maxRadius / distance;
+                point = new PointF(
+                    _startPos.X + (float)(dx * scale),
+                    _startPos.Y + (float)(dy * scale));
+            }
+
+            return point;
         }
 
         private void ClampCursorToCanvas()
@@ -312,19 +320,29 @@ namespace grapher.DesktopSens.Views
             using (var statusFont = new Font("Arial", 16, FontStyle.Bold))
             using (var smallFont = new Font("Arial", 9))
             {
-                float[] distancesCm = { 3f, 10f, 20f, 40f };
-                foreach (float cm in distancesCm)
+                // Draw the 3 cm base-sensitivity boundary and the 45/90/135/180-degree
+                // in-game turn rings. The outer ring is the hard end of this training model.
+                float baseRadius = (float)(Math.Min(3.0, _maxDistanceCm) * _pixelsPerCm);
+                g.DrawEllipse(Pens.DarkCyan, _startPos.X - baseRadius, _startPos.Y - baseRadius,
+                    baseRadius * 2, baseRadius * 2);
+                g.DrawString("3 cm base", smallFont, Brushes.DarkCyan,
+                    _startPos.X + baseRadius + 3, _startPos.Y);
+
+                double[] turnRings = { 45.0, 90.0, 135.0, DesktopSensConstants.MaxGameTurnDegrees };
+                foreach (double turnDegrees in turnRings)
                 {
-                    float radius = cm * _pixelsPerCm;
-                    g.DrawEllipse(Pens.DarkCyan, _startPos.X - radius, _startPos.Y - radius, radius * 2, radius * 2);
-                    g.DrawString(cm.ToString("0") + " cm", smallFont, Brushes.DarkCyan,
+                    float radius = (float)(turnDegrees / DesktopSensConstants.MaxGameTurnDegrees *
+                        _maxDistanceCm * _pixelsPerCm);
+                    g.DrawEllipse(Pens.DarkCyan, _startPos.X - radius, _startPos.Y - radius,
+                        radius * 2, radius * 2);
+                    g.DrawString(turnDegrees.ToString("0") + "° turn", smallFont, Brushes.DarkCyan,
                         _startPos.X + radius + 3, _startPos.Y);
                 }
 
                 for (int i = 0; i < DesktopSensConstants.AngularZoneCount; i++)
                 {
                     double angleRad = i * DesktopSensConstants.AngularZoneSizeDegrees * Math.PI / 180.0;
-                    float radius = 40f * _pixelsPerCm;
+                    float radius = (float)(_maxDistanceCm * _pixelsPerCm);
                     float xEnd = _startPos.X + (float)(Math.Cos(angleRad) * radius);
                     float yEnd = _startPos.Y + (float)(Math.Sin(angleRad) * radius);
                     g.DrawLine(_angleZoneCounts[i] > 0 ? Pens.Lime : Pens.DimGray,
@@ -349,16 +367,17 @@ namespace grapher.DesktopSens.Views
                 string status;
                 switch (_state)
                 {
-                    case TrialState.SetStartPoint: status = "1/2: Click the START point"; break;
-                    case TrialState.SetTargetPoint: status = "2/2: Click target (snaps to LEFT/RIGHT/UP/DOWN)"; break;
+                    case TrialState.SetStartPoint: status = "1/2: Click to center the start point"; break;
+                    case TrialState.SetTargetPoint: status = "2/2: Click any direction in the 360° field (max 180° turn)"; break;
                     case TrialState.Cooldown: status = "Get ready (3 seconds)..."; break;
                     case TrialState.Flicking: status = "Flick to the target, then click to record landing"; break;
                     case TrialState.ASDWAdjusting: status = "Adjust with W/A/S/D, then press SPACE to save trial"; break;
                     default: status = "Trial saved. Click to start a new trial (ESC to exit)."; break;
                 }
                 g.DrawString(status, statusFont, Brushes.Yellow, 20, 20);
-                g.DrawString("Distance scale: " + _pixelsPerCm.ToString("0") + " canvas px/cm | Trials: " +
-                    _profile.Trials.Count, smallFont, Brushes.White, 20, 48);
+                g.DrawString("180° turn radius: " + _maxDistanceCm.ToString("0.##") +
+                    " cm | 32 direction zones | Trials: " + _profile.Trials.Count,
+                    smallFont, Brushes.White, 20, 48);
             }
         }
     }
