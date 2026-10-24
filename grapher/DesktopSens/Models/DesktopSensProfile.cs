@@ -15,6 +15,17 @@ namespace grapher.DesktopSens.Models
         public double BaseSensitivity = 1.0;
         public double BaseSensitivityConfidence = 0.0;
 
+        // Four cardinal-direction sensitivity multipliers produced by the 4-way trainer.
+        // These are persisted with the profile and mapped onto RawAccel's native directional ratios.
+        public double RightSensitivityFactor = 1.0;
+        public double LeftSensitivityFactor = 1.0;
+        public double UpSensitivityFactor = 1.0;
+        public double DownSensitivityFactor = 1.0;
+        public double RightSensitivityConfidence = 0.0;
+        public double LeftSensitivityConfidence = 0.0;
+        public double UpSensitivityConfidence = 0.0;
+        public double DownSensitivityConfidence = 0.0;
+
         public int MouseDPI = 800;
         public double PollingRateHz = 1000.0;
 
