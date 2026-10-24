@@ -51,6 +51,8 @@ namespace grapher.DesktopSens.Models
         public long CompletionTimestamp;
 
         public int MouseDPI;
+        // Sensitivity used to convert raw mouse counts to CS2 view rotation for this trial.
+        public double GameSensitivity;
         public double EffectivePollingRateHz;
         public double CanvasPixelsPerCm;
     }
