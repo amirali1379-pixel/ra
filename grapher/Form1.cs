@@ -71,7 +71,15 @@ namespace grapher
                     form.ShowDialog();
                 }
             };
-            menuStrip1.Items.AddRange(new ToolStripItem[] { themeMenuItem, desktopSensMenuItem, HelpMenuItem });
+            var directional8WayMenuItem = new ToolStripMenuItem("&Directional 8-Way Sensitivity");
+            directional8WayMenuItem.Click += (s, e) => {
+                using (var form = new Directional8WayForm(AccelGUI))
+                {
+                    Theme.Apply(form);
+                    form.ShowDialog();
+                }
+            };
+            menuStrip1.Items.AddRange(new ToolStripItem[] { themeMenuItem, desktopSensMenuItem, directional8WayMenuItem, HelpMenuItem });
 
             Theme.Apply(this, menuStrip1);
 
