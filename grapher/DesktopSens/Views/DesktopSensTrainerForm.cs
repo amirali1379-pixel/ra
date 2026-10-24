@@ -99,7 +99,10 @@ namespace grapher.DesktopSens.Views
             // Keep mouse tracking enabled while placing the setup points. Freeze the virtual
             // cursor during cooldown and keyboard correction so those phases cannot contaminate
             // the raw flick measurement.
-            if (_state == TrialState.Cooldown ||
+            // Point placement uses the real OS cursor and must not be warped by raw-input
+            // recentering. Otherwise SetCursorPos feeds back into selection and the mouse feels stuck.
+            if (_state == TrialState.SetTargetPoint ||
+                _state == TrialState.Cooldown ||
                 _state == TrialState.ASDWAdjusting ||
                 _state == TrialState.TrialComplete)
                 return;
@@ -444,12 +447,18 @@ namespace grapher.DesktopSens.Views
                 return _calibrationOrigin;
             // Invert the scene's 68-degree perspective projection so the clicked screen
             // position maps to the corresponding point on the fixed calibration plane.
-            double halfFovTangent = Math.Tan(68.0 * Math.PI / 360.0);
-            float nx = (float)((point.X / ClientSize.Width) * 2.0 - 1.0);
-            float ny = (float)(1.0 - (point.Y / ClientSize.Height) * 2.0);
-            float x = (float)(nx * halfFovTangent * ((float)ClientSize.Width / ClientSize.Height)
-                * CalibrationPlaneDistance);
-            float y = (float)(ny * halfFovTangent * CalibrationPlaneDistance);
+            // Preserve the trainer's calibration math: pixel displacement is converted to
+            // physical cm, then to the corresponding turn angle (180 degrees == max distance).
+            // Do not use the camera FOV here; that would make the visible target disagree with
+            // the sensitivity measurement.
+            float dxPixels = point.X - _startPos.X;
+            float dyPixels = _startPos.Y - point.Y;
+            double degreesPerPixel = 180.0 /
+                (Math.Max(0.001, _maxDistanceCm) * Math.Max(1f, _pixelsPerCm));
+            double yawOffset = dxPixels * degreesPerPixel * Math.PI / 180.0;
+            double pitchOffset = dyPixels * degreesPerPixel * Math.PI / 180.0;
+            float x = (float)(Math.Tan(yawOffset) * CalibrationPlaneDistance);
+            float y = (float)(Math.Tan(pitchOffset) * CalibrationPlaneDistance);
             return _calibrationOrigin + _calibrationRight * x + _calibrationUp * y;
         }
 
