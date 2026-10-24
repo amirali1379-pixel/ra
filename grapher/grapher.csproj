@@ -216,6 +216,7 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
+    <Compile Include="DesktopSens\Models\DirectionalCalibrator.cs" />
     <Compile Include="DesktopSens\Models\DesktopSensConstants.cs" />
 	<Compile Include="DesktopSens\Models\DesktopSensCalibrator.cs" />
     <Compile Include="DesktopSens\Models\ZoneCalculations.cs" />
