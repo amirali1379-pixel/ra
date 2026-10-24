@@ -451,7 +451,7 @@ namespace grapher.DesktopSens.Views
             }
             _hud.Text = "DESKTOPSENS 3D  |  Yaw " + _cameraYawDegrees.ToString("0") + "°  Pitch " +
                 _cameraPitchDegrees.ToString("0") + "°  |  Trials " + _profile.Trials.Count + Environment.NewLine +
-                instruction + Environment.NewLine + "FPS range · raw mouse look · calibrated 180° turn-distance limit";
+                instruction + Environment.NewLine + "FPS range · raw mouse look · 360° cylindrical angular arena";
             _arena3D.Invalidate();
         }
 
@@ -479,21 +479,27 @@ namespace grapher.DesktopSens.Views
         {
             if (ClientSize.Width < 1 || ClientSize.Height < 1)
                 return _calibrationOrigin;
-            // Invert the scene's 68-degree perspective projection so the clicked screen
-            // position maps to the corresponding point on the fixed calibration plane.
-            // Preserve the trainer's calibration math: pixel displacement is converted to
-            // physical cm, then to the corresponding turn angle (180 degrees == max distance).
-            // Do not use the camera FOV here; that would make the visible target disagree with
-            // the sensitivity measurement.
+
+            // Treat the trainer as an angular map around the player, not a flat tangent
+            // plane. Tan(angle) explodes at 90 degrees and flips sign beyond it, which made
+            // targets at/near a quarter-turn disappear. A fixed-radius cylindrical mapping
+            // remains finite through a full 360-degree yaw.
             float dxPixels = point.X - _startPos.X;
             float dyPixels = _startPos.Y - point.Y;
             double degreesPerPixel = 180.0 /
                 (Math.Max(0.001, _maxDistanceCm) * Math.Max(1f, _pixelsPerCm));
             double yawOffset = dxPixels * degreesPerPixel * Math.PI / 180.0;
             double pitchOffset = dyPixels * degreesPerPixel * Math.PI / 180.0;
-            float x = (float)(Math.Tan(yawOffset) * CalibrationPlaneDistance);
-            float y = (float)(Math.Tan(pitchOffset) * CalibrationPlaneDistance);
-            return _calibrationOrigin + _calibrationRight * x + _calibrationUp * y;
+
+            Vector3 forward = _calibrationForward;
+            Vector3 right = _calibrationRight;
+            Vector3 up = _calibrationUp;
+            Vector3 horizontal = Vector3.Normalize(forward * (float)Math.Cos(yawOffset)
+                + right * (float)Math.Sin(yawOffset));
+            Vector3 direction = Vector3.Normalize(horizontal * (float)Math.Cos(pitchOffset)
+                + up * (float)Math.Sin(pitchOffset));
+            Vector3 eye = new Vector3(0f, 1.7f, 0f);
+            return eye + direction * CalibrationPlaneDistance;
         }
 
         private void InvalidateArena()
