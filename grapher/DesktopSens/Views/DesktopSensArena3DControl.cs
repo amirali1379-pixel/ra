@@ -104,49 +104,56 @@ namespace grapher.DesktopSens.Views
             GL.Enable(EnableCap.DepthTest);
         }
 
-        // Compact indoor FPS range: floor, side walls, ceiling beams and a target wall.
-        // Coordinates are world-space; the camera remains at player eye height.
+        // Cylindrical FPS arena: a circular floor and curved wall avoid the old
+        // box-room edges and allow the target ring to remain visible around 360 degrees.
         private void DrawIndoorRange()
         {
-            const float halfWidth = 18f, length = 42f, wallHeight = 8f;
-            GL.Begin(PrimitiveType.Quads);
+            const float radius = 24f, wallHeight = 8f;
+            const int segments = 96;
+            GL.Begin(PrimitiveType.TriangleFan);
             GL.Color3(0.10f, 0.12f, 0.13f);
-            GL.Vertex3(-halfWidth, 0f, 3f); GL.Vertex3(halfWidth, 0f, 3f);
-            GL.Vertex3(halfWidth, 0f, -length); GL.Vertex3(-halfWidth, 0f, -length);
-            GL.Color3(0.16f, 0.18f, 0.19f);
-            GL.Vertex3(-halfWidth, wallHeight, 3f); GL.Vertex3(-halfWidth, wallHeight, -length);
-            GL.Vertex3(-halfWidth, 0f, -length); GL.Vertex3(-halfWidth, 0f, 3f);
-            GL.Vertex3(halfWidth, wallHeight, -length); GL.Vertex3(halfWidth, wallHeight, 3f);
-            GL.Vertex3(halfWidth, 0f, 3f); GL.Vertex3(halfWidth, 0f, -length);
-            GL.Color3(0.12f, 0.14f, 0.15f);
-            GL.Vertex3(-halfWidth, wallHeight, 3f); GL.Vertex3(halfWidth, wallHeight, 3f);
-            GL.Vertex3(halfWidth, wallHeight, -length); GL.Vertex3(-halfWidth, wallHeight, -length);
-            GL.Color3(0.24f, 0.26f, 0.27f);
-            GL.Vertex3(-halfWidth, 0f, -length); GL.Vertex3(halfWidth, 0f, -length);
-            GL.Vertex3(halfWidth, wallHeight, -length); GL.Vertex3(-halfWidth, wallHeight, -length);
+            GL.Vertex3(0f, 0.005f, 0f);
+            for (int i = 0; i <= segments; i++)
+            {
+                double a = i * Math.PI * 2.0 / segments;
+                GL.Vertex3((float)Math.Cos(a) * radius, 0.005f, (float)Math.Sin(a) * radius);
+            }
             GL.End();
 
-            // Subtle lane seams and ceiling lights establish depth without a circular HUD/floor.
+            GL.Begin(PrimitiveType.QuadStrip);
+            for (int i = 0; i <= segments; i++)
+            {
+                double a = i * Math.PI * 2.0 / segments;
+                float x = (float)Math.Cos(a) * radius;
+                float z = (float)Math.Sin(a) * radius;
+                GL.Color3(0.16f, 0.18f, 0.19f);
+                GL.Vertex3(x, 0f, z);
+                GL.Vertex3(x, wallHeight, z);
+            }
+            GL.End();
+
+            // Circular floor seams and curved ceiling lights make the cylindrical shape legible.
             GL.LineWidth(1f);
             GL.Begin(PrimitiveType.Lines);
-            for (int z = 0; z >= -40; z -= 4)
+            for (int ring = 4; ring < (int)radius; ring += 4)
             {
-                GL.Color3(0.20f, 0.24f, 0.25f);
-                GL.Vertex3(-halfWidth, 0.012f, z); GL.Vertex3(halfWidth, 0.012f, z);
+                for (int i = 0; i < segments; i++)
+                {
+                    double a1 = i * Math.PI * 2.0 / segments;
+                    double a2 = (i + 1) * Math.PI * 2.0 / segments;
+                    GL.Color3(0.20f, 0.24f, 0.25f);
+                    GL.Vertex3((float)Math.Cos(a1) * ring, 0.015f, (float)Math.Sin(a1) * ring);
+                    GL.Vertex3((float)Math.Cos(a2) * ring, 0.015f, (float)Math.Sin(a2) * ring);
+                }
             }
-            for (int z = -4; z >= -36; z -= 8)
+            for (int i = 0; i < segments; i += 8)
             {
+                double a = i * Math.PI * 2.0 / segments;
+                float x = (float)Math.Cos(a) * radius;
+                float z = (float)Math.Sin(a) * radius;
                 GL.Color3(0.34f, 0.37f, 0.37f);
-                GL.Vertex3(-halfWidth, 7.8f, z); GL.Vertex3(halfWidth, 7.8f, z);
-            }
-            GL.End();
-
-            GL.Begin(PrimitiveType.Quads);
-            for (int z = -8; z >= -36; z -= 8)
-            {
-                GL.Color4(0.72f, 0.78f, 0.78f, 0.65f);
-                GL.Vertex3(-4f, 7.72f, z); GL.Vertex3(4f, 7.72f, z);
-                GL.Vertex3(4f, 7.72f, z - 0.45f); GL.Vertex3(-4f, 7.72f, z - 0.45f);
+                GL.Vertex3(x, 7.8f, z);
+                GL.Vertex3(x * 0.92f, 7.8f, z * 0.92f);
             }
             GL.End();
         }
