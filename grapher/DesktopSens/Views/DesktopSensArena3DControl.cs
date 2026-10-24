@@ -52,15 +52,9 @@ namespace grapher.DesktopSens.Views
             GL.MatrixMode(MatrixMode.Modelview);
             GL.LoadMatrix(ref view);
 
-            DrawGround();
-            DrawRings();
-            DrawAxes();
+            DrawIndoorRange();
             if (ShowTarget)
-            {
-                DrawMarker(new Vector3(Target.X, 0.05f, -Target.Y), 0.22f, 1f, 0.57f, 0.25f);
-                DrawLine(Vector3.Zero, new Vector3(Target.X, 0.05f, -Target.Y), 1f, 0.57f, 0.25f);
-            }
-            DrawMarker(new Vector3(CursorWorld.X, 0.08f, -CursorWorld.Y), 0.13f, 0.25f, 0.95f, 0.72f);
+                DrawTargetBoard(Target);
             DrawScreenCrosshair();
             SwapBuffers();
         }
@@ -105,53 +99,91 @@ namespace grapher.DesktopSens.Views
             GL.Enable(EnableCap.DepthTest);
         }
 
-        private void DrawGround()
+        // Compact indoor FPS range: floor, side walls, ceiling beams and a target wall.
+        // Coordinates are world-space; the camera remains at player eye height.
+        private void DrawIndoorRange()
         {
+            const float halfWidth = 18f, length = 42f, wallHeight = 8f;
             GL.Begin(PrimitiveType.Quads);
-            GL.Color4(0.06f, 0.085f, 0.095f, 1f);
-            GL.Vertex3(-Radius * 2, -0.03, -Radius * 2);
-            GL.Vertex3(Radius * 2, -0.03, -Radius * 2);
-            GL.Vertex3(Radius * 2, -0.03, Radius * 2);
-            GL.Vertex3(-Radius * 2, -0.03, Radius * 2);
+            GL.Color3(0.10f, 0.12f, 0.13f);
+            GL.Vertex3(-halfWidth, 0f, 3f); GL.Vertex3(halfWidth, 0f, 3f);
+            GL.Vertex3(halfWidth, 0f, -length); GL.Vertex3(-halfWidth, 0f, -length);
+            GL.Color3(0.16f, 0.18f, 0.19f);
+            GL.Vertex3(-halfWidth, wallHeight, 3f); GL.Vertex3(-halfWidth, wallHeight, -length);
+            GL.Vertex3(-halfWidth, 0f, -length); GL.Vertex3(-halfWidth, 0f, 3f);
+            GL.Vertex3(halfWidth, wallHeight, -length); GL.Vertex3(halfWidth, wallHeight, 3f);
+            GL.Vertex3(halfWidth, 0f, 3f); GL.Vertex3(halfWidth, 0f, -length);
+            GL.Color3(0.12f, 0.14f, 0.15f);
+            GL.Vertex3(-halfWidth, wallHeight, 3f); GL.Vertex3(halfWidth, wallHeight, 3f);
+            GL.Vertex3(halfWidth, wallHeight, -length); GL.Vertex3(-halfWidth, wallHeight, -length);
+            GL.Color3(0.24f, 0.26f, 0.27f);
+            GL.Vertex3(-halfWidth, 0f, -length); GL.Vertex3(halfWidth, 0f, -length);
+            GL.Vertex3(halfWidth, wallHeight, -length); GL.Vertex3(-halfWidth, wallHeight, -length);
             GL.End();
+
+            // Subtle lane seams and ceiling lights establish depth without a circular HUD/floor.
             GL.LineWidth(1f);
             GL.Begin(PrimitiveType.Lines);
-            for (int i = -20; i <= 20; i++)
+            for (int z = 0; z >= -40; z -= 4)
             {
-                float p = Radius * i / 10f;
-                GL.Color4(0.18f, 0.29f, 0.31f, 0.38f);
-                GL.Vertex3(p, 0f, -Radius * 2); GL.Vertex3(p, 0f, Radius * 2);
-                GL.Vertex3(-Radius * 2, 0f, p); GL.Vertex3(Radius * 2, 0f, p);
+                GL.Color3(0.20f, 0.24f, 0.25f);
+                GL.Vertex3(-halfWidth, 0.012f, z); GL.Vertex3(halfWidth, 0.012f, z);
+            }
+            for (int z = -4; z >= -36; z -= 8)
+            {
+                GL.Color3(0.34f, 0.37f, 0.37f);
+                GL.Vertex3(-halfWidth, 7.8f, z); GL.Vertex3(halfWidth, 7.8f, z);
+            }
+            GL.End();
+
+            GL.Begin(PrimitiveType.Quads);
+            for (int z = -8; z >= -36; z -= 8)
+            {
+                GL.Color4(0.72f, 0.78f, 0.78f, 0.65f);
+                GL.Vertex3(-4f, 7.72f, z); GL.Vertex3(4f, 7.72f, z);
+                GL.Vertex3(4f, 7.72f, z - 0.45f); GL.Vertex3(-4f, 7.72f, z - 0.45f);
             }
             GL.End();
         }
 
-        private void DrawRings()
+        private static void DrawTargetBoard(PointF target)
         {
-            double[] fractions = { 0.25, 0.5, 0.75, 1.0 };
-            foreach (double fraction in fractions)
-            {
-                float r = (float)(Radius * fraction);
-                GL.Color4(0.40f, 0.67f, 0.69f, fraction == 1.0 ? 0.95f : 0.42f);
-                GL.LineWidth(fraction == 1.0 ? 2.5f : 1f);
-                GL.Begin(PrimitiveType.LineLoop);
-                for (int i = 0; i < 160; i++)
-                {
-                    double a = i * Math.PI * 2 / 160.0;
-                    GL.Vertex3(Math.Cos(a) * r, 0.025, Math.Sin(a) * r);
-                }
-                GL.End();
-            }
-        }
+            // Target values are angular-distance proxies in calibrated cm. Convert them
+            // to a vertical board position at a fixed range, rather than drawing a marker on the floor.
+            const float boardDistance = 18f;
+            float x = (float)Math.Tan(target.X * Math.PI / 180.0) * boardDistance;
+            float y = 1.7f + (float)Math.Tan(target.Y * Math.PI / 180.0) * boardDistance;
+            y = Math.Max(0.35f, Math.Min(6.8f, y));
 
-        private static void DrawAxes()
-        {
+            GL.Begin(PrimitiveType.Quads);
+            GL.Color3(0.30f, 0.32f, 0.32f);
+            GL.Vertex3(x - 0.72f, y - 0.72f, -boardDistance);
+            GL.Vertex3(x + 0.72f, y - 0.72f, -boardDistance);
+            GL.Vertex3(x + 0.72f, y + 0.72f, -boardDistance);
+            GL.Vertex3(x - 0.72f, y + 0.72f, -boardDistance);
+            GL.End();
+
             GL.LineWidth(2f);
-            GL.Begin(PrimitiveType.Lines);
-            GL.Color3(0.95f, 0.34f, 0.27f); GL.Vertex3(0, 0.04, 0); GL.Vertex3(2, 0.04, 0);
-            GL.Color3(0.25f, 0.75f, 0.48f); GL.Vertex3(0, 0.04, 0); GL.Vertex3(0, 0.04, -2);
+            GL.Begin(PrimitiveType.LineLoop);
+            GL.Color3(0.92f, 0.36f, 0.22f);
+            GL.Vertex3(x - 0.58f, y - 0.58f, -boardDistance + 0.01f);
+            GL.Vertex3(x + 0.58f, y - 0.58f, -boardDistance + 0.01f);
+            GL.Vertex3(x + 0.58f, y + 0.58f, -boardDistance + 0.01f);
+            GL.Vertex3(x - 0.58f, y + 0.58f, -boardDistance + 0.01f);
             GL.End();
-            DrawMarker(Vector3.Zero, 0.16f, 0.25f, 0.85f, 0.68f);
+            GL.Begin(PrimitiveType.LineLoop);
+            GL.Color3(0.96f, 0.75f, 0.25f);
+            for (int i = 0; i < 48; i++)
+            {
+                double a = i * Math.PI * 2 / 48.0;
+                GL.Vertex3(x + Math.Cos(a) * 0.38, y + Math.Sin(a) * 0.38, -boardDistance + 0.02f);
+            }
+            GL.End();
+            GL.Begin(PrimitiveType.Lines);
+            GL.Color3(0.96f, 0.75f, 0.25f);
+            GL.Vertex3(x - 0.22f, y, -boardDistance + 0.03f); GL.Vertex3(x + 0.22f, y, -boardDistance + 0.03f);
+            GL.Vertex3(x, y - 0.22f, -boardDistance + 0.03f); GL.Vertex3(x, y + 0.22f, -boardDistance + 0.03f);
+            GL.End();
         }
 
         private static void DrawMarker(Vector3 p, float size, float r, float g, float b)
