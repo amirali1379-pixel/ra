@@ -548,7 +548,7 @@ namespace grapher.DesktopSens.Views
             float compassRadius = Math.Max(100f, Math.Min(ClientSize.Width, ClientSize.Height) * 0.34f);
             for (int i = 0; i < _degreeLabels.Length; i++)
             {
-                double radians = i * 10.0 * Math.PI / 180.0;
+                double radians = (i * 10.0 - relativeYaw) * Math.PI / 180.0;
                 Label label = _degreeLabels[i];
                 label.Location = new Point(
                     (int)(cx + Math.Sin(radians) * compassRadius - label.Width / 2f),
@@ -558,8 +558,8 @@ namespace grapher.DesktopSens.Views
             double shownAngle = _state == TrialState.SetTargetPoint ? relativeYaw : _targetYawDegrees;
             _selectedAngleLabel.Text = "TARGET POINT: " + shownAngle.ToString("0.0") + "°";
             PointF angleAnchor = _state == TrialState.SetTargetPoint
-                ? new PointF(cx + (float)(Math.Sin(relativeYaw * Math.PI / 180.0) * compassRadius),
-                    cy - (float)(Math.Cos(relativeYaw * Math.PI / 180.0) * compassRadius))
+                ? new PointF(cx + (float)(Math.Sin((shownAngle - relativeYaw) * Math.PI / 180.0) * compassRadius),
+                    cy - (float)(Math.Cos((shownAngle - relativeYaw) * Math.PI / 180.0) * compassRadius))
                 : _targetPos;
             _selectedAngleLabel.Location = new Point(
                 (int)(angleAnchor.X - _selectedAngleLabel.Width / 2f),
