@@ -168,40 +168,50 @@ namespace grapher.DesktopSens.Views
             }
             GL.End();
 
-            // Spherical sky grid: it has no top edge, so looking up never reveals
-            // the end of a short room. The lower hemisphere is omitted intentionally.
-            const float skyRadius = 150f;
+            // A complete 360-degree spherical reference shell, not an upper-only
+            // sky dome. Every azimuth and elevation is generated around the camera,
+            // so turning through a full revolution never exposes an edge or a seam.
+            const float shellRadius = 150f;
             const int azimuthSegments = 72;
-            const int elevationSegments = 9;
+            const int elevationSegments = 18;
+            GL.LineWidth(1f);
             GL.Begin(PrimitiveType.Lines);
-            for (int elevation = 1; elevation <= elevationSegments; elevation++)
+
+            // Latitude rings from just above the floor through the zenith and back
+            // down to the opposite side of the horizon.
+            for (int row = 1; row < elevationSegments; row++)
             {
-                double elev = elevation * (Math.PI * 0.5) / (elevationSegments + 1);
-                for (int i = 0; i < azimuthSegments; i += 1)
+                double elev = -Math.PI * 0.5 + row * Math.PI / elevationSegments;
+                double y = Math.Sin(elev) * shellRadius;
+                double r = Math.Cos(elev) * shellRadius;
+                for (int i = 0; i < azimuthSegments; i++)
                 {
                     double a1 = i * Math.PI * 2.0 / azimuthSegments;
                     double a2 = (i + 1) * Math.PI * 2.0 / azimuthSegments;
-                    float y = (float)(Math.Sin(elev) * skyRadius);
-                    float r = (float)(Math.Cos(elev) * skyRadius);
-                    GL.Color3(0.12f, 0.17f, 0.20f);
-                    GL.Vertex3((float)Math.Cos(a1) * r, y, (float)Math.Sin(a1) * r);
-                    GL.Vertex3((float)Math.Cos(a2) * r, y, (float)Math.Sin(a2) * r);
+                    GL.Color3(row == elevationSegments / 2 ? 0.22f : 0.12f,
+                        row == elevationSegments / 2 ? 0.29f : 0.17f,
+                        row == elevationSegments / 2 ? 0.32f : 0.20f);
+                    GL.Vertex3((float)(Math.Cos(a1) * r), (float)y, (float)(Math.Sin(a1) * r));
+                    GL.Vertex3((float)(Math.Cos(a2) * r), (float)y, (float)(Math.Sin(a2) * r));
                 }
             }
+
+            // Full-height meridians. Their endpoints meet at both poles, and their
+            // 15-degree spacing matches the 360-degree azimuth reference below.
             for (int degree = 0; degree < 360; degree += 15)
             {
                 double a = degree * Math.PI / 180.0;
-                for (int elevation = 0; elevation < elevationSegments; elevation++)
+                for (int row = 0; row < elevationSegments; row++)
                 {
-                    double e1 = elevation * (Math.PI * 0.5) / elevationSegments;
-                    double e2 = (elevation + 1) * (Math.PI * 0.5) / elevationSegments;
+                    double e1 = -Math.PI * 0.5 + row * Math.PI / elevationSegments;
+                    double e2 = -Math.PI * 0.5 + (row + 1) * Math.PI / elevationSegments;
                     GL.Color3(0.12f, 0.17f, 0.20f);
-                    GL.Vertex3((float)(Math.Cos(a) * Math.Cos(e1) * skyRadius),
-                        (float)(Math.Sin(e1) * skyRadius),
-                        (float)(Math.Sin(a) * Math.Cos(e1) * skyRadius));
-                    GL.Vertex3((float)(Math.Cos(a) * Math.Cos(e2) * skyRadius),
-                        (float)(Math.Sin(e2) * skyRadius),
-                        (float)(Math.Sin(a) * Math.Cos(e2) * skyRadius));
+                    GL.Vertex3((float)(Math.Cos(a) * Math.Cos(e1) * shellRadius),
+                        (float)(Math.Sin(e1) * shellRadius),
+                        (float)(Math.Sin(a) * Math.Cos(e1) * shellRadius));
+                    GL.Vertex3((float)(Math.Cos(a) * Math.Cos(e2) * shellRadius),
+                        (float)(Math.Sin(e2) * shellRadius),
+                        (float)(Math.Sin(a) * Math.Cos(e2) * shellRadius));
                 }
             }
             GL.End();
