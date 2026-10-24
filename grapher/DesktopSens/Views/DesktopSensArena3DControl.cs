@@ -56,19 +56,13 @@ namespace grapher.DesktopSens.Views
                 : new Vector3(0f, 0f, -1f);
             Vector3 eye = new Vector3(0f, 1.7f, 0f);
 
-            // Keep the camera's screen-up axis in the same calibration frame as the
-            // target rings. Using world UnitY here while look is built from the tilted
-            // calibration basis makes the rendered scene roll/drift relative to the
-            // fixed screen-space crosshair as the mouse moves.
-            Vector3 calibrationUp = CalibrationUp.LengthSquared > 0.0001f
-                ? Vector3.Normalize(CalibrationUp)
-                : Vector3.UnitY;
-            Vector3 up = calibrationUp - look * Vector3.Dot(calibrationUp, look);
+            // FPS camera must stay upright in world space. Project world-up onto
+            // the plane perpendicular to look so yaw never introduces camera roll.
+            Vector3 worldUp = Vector3.UnitY;
+            Vector3 up = worldUp - look * Vector3.Dot(worldUp, look);
             if (up.LengthSquared < 0.0001f)
             {
-                Vector3 fallback = Math.Abs(Vector3.Dot(look, Vector3.UnitY)) < 0.98f
-                    ? Vector3.UnitY
-                    : Vector3.UnitZ;
+                Vector3 fallback = Vector3.UnitZ;
                 up = fallback - look * Vector3.Dot(fallback, look);
             }
             up = Vector3.Normalize(up);
@@ -126,56 +120,89 @@ namespace grapher.DesktopSens.Views
             GL.Enable(EnableCap.DepthTest);
         }
 
-        // Cylindrical FPS arena: a circular floor and curved wall avoid the old
-        // box-room edges and allow the target ring to remain visible around 360 degrees.
+        // Open 360-degree training world: no finite wall or ceiling edge.
+        // The floor is a large, seamless circular grid; a sky dome supplies a stable
+        // horizon in every direction without creating a box-room cutoff.
         private void DrawIndoorRange()
         {
-            const float radius = 24f, wallHeight = 8f;
-            const int segments = 96;
+            const float floorRadius = 180f;
+            const int segments = 180;
+
             GL.Begin(PrimitiveType.TriangleFan);
-            GL.Color3(0.10f, 0.12f, 0.13f);
-            GL.Vertex3(0f, 0.005f, 0f);
+            GL.Color3(0.075f, 0.09f, 0.10f);
+            GL.Vertex3(0f, 0f, 0f);
             for (int i = 0; i <= segments; i++)
             {
                 double a = i * Math.PI * 2.0 / segments;
-                GL.Vertex3((float)Math.Cos(a) * radius, 0.005f, (float)Math.Sin(a) * radius);
+                GL.Vertex3((float)Math.Cos(a) * floorRadius, 0f,
+                    (float)Math.Sin(a) * floorRadius);
             }
             GL.End();
 
-            GL.Begin(PrimitiveType.QuadStrip);
-            for (int i = 0; i <= segments; i++)
-            {
-                double a = i * Math.PI * 2.0 / segments;
-                float x = (float)Math.Cos(a) * radius;
-                float z = (float)Math.Sin(a) * radius;
-                GL.Color3(0.16f, 0.18f, 0.19f);
-                GL.Vertex3(x, 0f, z);
-                GL.Vertex3(x, wallHeight, z);
-            }
-            GL.End();
-
-            // Circular floor seams and curved ceiling lights make the cylindrical shape legible.
             GL.LineWidth(1f);
             GL.Begin(PrimitiveType.Lines);
-            for (int ring = 4; ring < (int)radius; ring += 4)
+            // Ground rings continue far beyond the visible training range.
+            for (int ring = 4; ring <= 176; ring += 4)
             {
                 for (int i = 0; i < segments; i++)
                 {
                     double a1 = i * Math.PI * 2.0 / segments;
                     double a2 = (i + 1) * Math.PI * 2.0 / segments;
-                    GL.Color3(0.20f, 0.24f, 0.25f);
-                    GL.Vertex3((float)Math.Cos(a1) * ring, 0.015f, (float)Math.Sin(a1) * ring);
-                    GL.Vertex3((float)Math.Cos(a2) * ring, 0.015f, (float)Math.Sin(a2) * ring);
+                    GL.Color3(ring % 20 == 0 ? 0.22f : 0.13f,
+                        ring % 20 == 0 ? 0.27f : 0.17f, 0.18f);
+                    GL.Vertex3((float)Math.Cos(a1) * ring, 0.012f,
+                        (float)Math.Sin(a1) * ring);
+                    GL.Vertex3((float)Math.Cos(a2) * ring, 0.012f,
+                        (float)Math.Sin(a2) * ring);
                 }
             }
-            for (int i = 0; i < segments; i += 8)
+            // Radial guides provide orientation without enclosing the player.
+            for (int degree = 0; degree < 360; degree += 15)
             {
-                double a = i * Math.PI * 2.0 / segments;
-                float x = (float)Math.Cos(a) * radius;
-                float z = (float)Math.Sin(a) * radius;
-                GL.Color3(0.34f, 0.37f, 0.37f);
-                GL.Vertex3(x, 7.8f, z);
-                GL.Vertex3(x * 0.92f, 7.8f, z * 0.92f);
+                double a = degree * Math.PI / 180.0;
+                GL.Color3(degree % 45 == 0 ? 0.23f : 0.14f,
+                    degree % 45 == 0 ? 0.28f : 0.18f, 0.20f);
+                GL.Vertex3(0f, 0.018f, 0f);
+                GL.Vertex3((float)Math.Cos(a) * floorRadius, 0.018f,
+                    (float)Math.Sin(a) * floorRadius);
+            }
+            GL.End();
+
+            // Spherical sky grid: it has no top edge, so looking up never reveals
+            // the end of a short room. The lower hemisphere is omitted intentionally.
+            const float skyRadius = 150f;
+            const int azimuthSegments = 72;
+            const int elevationSegments = 9;
+            GL.Begin(PrimitiveType.Lines);
+            for (int elevation = 1; elevation <= elevationSegments; elevation++)
+            {
+                double elev = elevation * (Math.PI * 0.5) / (elevationSegments + 1);
+                for (int i = 0; i < azimuthSegments; i += 1)
+                {
+                    double a1 = i * Math.PI * 2.0 / azimuthSegments;
+                    double a2 = (i + 1) * Math.PI * 2.0 / azimuthSegments;
+                    float y = (float)(Math.Sin(elev) * skyRadius);
+                    float r = (float)(Math.Cos(elev) * skyRadius);
+                    GL.Color3(0.12f, 0.17f, 0.20f);
+                    GL.Vertex3((float)Math.Cos(a1) * r, y, (float)Math.Sin(a1) * r);
+                    GL.Vertex3((float)Math.Cos(a2) * r, y, (float)Math.Sin(a2) * r);
+                }
+            }
+            for (int degree = 0; degree < 360; degree += 15)
+            {
+                double a = degree * Math.PI / 180.0;
+                for (int elevation = 0; elevation < elevationSegments; elevation++)
+                {
+                    double e1 = elevation * (Math.PI * 0.5) / elevationSegments;
+                    double e2 = (elevation + 1) * (Math.PI * 0.5) / elevationSegments;
+                    GL.Color3(0.12f, 0.17f, 0.20f);
+                    GL.Vertex3((float)(Math.Cos(a) * Math.Cos(e1) * skyRadius),
+                        (float)(Math.Sin(e1) * skyRadius),
+                        (float)(Math.Sin(a) * Math.Cos(e1) * skyRadius));
+                    GL.Vertex3((float)(Math.Cos(a) * Math.Cos(e2) * skyRadius),
+                        (float)(Math.Sin(e2) * skyRadius),
+                        (float)(Math.Sin(a) * Math.Cos(e2) * skyRadius));
+                }
             }
             GL.End();
         }
