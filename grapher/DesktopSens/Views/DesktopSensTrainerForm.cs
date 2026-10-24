@@ -187,7 +187,11 @@ namespace grapher.DesktopSens.Views
                 _arena3D.TargetPoint = ScreenPointToWorld(_targetPos);
                 _arena3D.ShowTarget = true;
 
-                double targetDistanceCm = _maxDistanceCm * _targetYawDegrees / 180.0;
+                // The target picker is a full 360-degree angular arena. Do not reject
+                // targets merely because their yaw is beyond the old 180-degree turn radius.
+                // Keep the minimum-distance guard only for targets effectively at the origin.
+                double targetAngleRadians = Math.Abs(_targetYawDegrees) * Math.PI / 180.0;
+                double targetDistanceCm = _maxDistanceCm * Math.Min(1.0, targetAngleRadians / Math.PI);
                 if (targetDistanceCm < 0.25)
                 {
                     MessageBox.Show(this, "Choose a target at least 0.25 cm away from the start point.",
