@@ -170,8 +170,17 @@ namespace grapher.DesktopSens.Views
         // forward direction; major marks every 30° make the full 360° reference visible.
         private void DrawAzimuthTicks()
         {
-            Vector3 forward = Vector3.Normalize(CalibrationForward);
-            Vector3 right = Vector3.Normalize(CalibrationRight);
+            // Azimuth is a horizontal world-space reference, not part of the pitched
+            // calibration plane. Using CalibrationForward/Right directly here carried
+            // their Y component into the floor ring, making the degree axis appear tilted
+            // whenever calibration was captured while looking up/down.
+            Vector3 forward = new Vector3(CalibrationForward.X, 0f, CalibrationForward.Z);
+            if (forward.LengthSquared < 0.0001f)
+                forward = new Vector3(0f, 0f, -1f);
+            forward = Vector3.Normalize(forward);
+
+            // Build a level right vector from the horizontal forward direction.
+            Vector3 right = Vector3.Normalize(Vector3.Cross(forward, Vector3.UnitY));
             const float innerRadius = 20.5f;
             const float outerMinor = 21.0f;
             const float outerMajor = 21.8f;
@@ -181,7 +190,8 @@ namespace grapher.DesktopSens.Views
             {
                 double radians = degree * Math.PI / 180.0;
                 Vector3 direction = Vector3.Normalize(
-                    forward * (float)Math.Cos(radians) + right * (float)Math.Sin(radians));
+                    forward * (float)Math.Cos(radians) +
+                    right * (float)Math.Sin(radians));
                 float outer = degree % 30 == 0 ? outerMajor : outerMinor;
                 if (degree == 0) GL.Color3(0.25f, 0.95f, 0.62f);
                 else if (degree % 30 == 0) GL.Color3(0.95f, 0.72f, 0.25f);
