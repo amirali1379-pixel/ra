@@ -29,6 +29,7 @@ namespace grapher.DesktopSens.Views
         private PointF _currentCursorPos;
         private PointF _rawLandedPos;
         private double _targetYawDegrees;
+        private double _targetDistanceCm;
         private double _targetPitchDegrees;
         private double _landedYawDegrees;
         private double _landedPitchDegrees;
@@ -64,6 +65,7 @@ namespace grapher.DesktopSens.Views
 
             _maxDistanceCm = ZoneCalculations.MaxDistanceCmForTurnDegrees(
                 _profile.MouseDPI, _profile.UserInputGameSensitivity);
+            _targetDistanceCm = Math.Max(0.5, _maxDistanceCm * 0.5);
             _pixelsPerCm = (float)(Math.Min(Screen.PrimaryScreen.Bounds.Width, Screen.PrimaryScreen.Bounds.Height) /
                 (2.0 * _maxDistanceCm));
 
@@ -113,7 +115,21 @@ namespace grapher.DesktopSens.Views
             _arena3D.MouseDown += (s, e) => OnMouseDown(e);
             _arena3D.MouseMove += (s, e) => OnMouseMove(e);
             _arena3D.MouseUp += (s, e) => OnMouseUp(e);
-            _arena3D.MouseWheel += (s, e) => { _cameraPitchDegrees = Math.Max(5f, Math.Min(65f, _cameraPitchDegrees + e.Delta / 120f)); InvalidateArena(); };
+            _arena3D.MouseWheel += (s, e) =>
+            {
+                if (_state == TrialState.SetTargetPoint)
+                {
+                    double step = Math.Max(0.25, _maxDistanceCm * 0.025);
+                    _targetDistanceCm = Math.Max(0.5, Math.Min(_maxDistanceCm,
+                        _targetDistanceCm + (e.Delta > 0 ? step : -step)));
+                }
+                else
+                {
+                    _cameraPitchDegrees = Math.Max(5f, Math.Min(65f,
+                        _cameraPitchDegrees + (e.Delta > 0 ? 2f : -2f)));
+                }
+                UpdateArena3D();
+            };
             Cursor.Hide();
 
             _startPos = new PointF(ClientSize.Width / 2f, ClientSize.Height / 2f);
@@ -211,12 +227,13 @@ namespace grapher.DesktopSens.Views
                 // repeats every 360 degrees, so it cannot uniquely represent multiple turns.
                 _targetYawDegrees = NormalizeAngle(_cameraYawDegrees - _calibrationYawDegrees);
                 _targetPitchDegrees = _cameraPitchDegrees - _calibrationPitchDegrees;
-                double arenaRadiusPx = Math.Max(1.0, Math.Min(ClientSize.Width, ClientSize.Height) * 0.42);
+                double maxArenaRadiusPx = Math.Max(1.0, Math.Min(ClientSize.Width, ClientSize.Height) * 0.42);
+                double arenaRadiusPx = maxArenaRadiusPx * (_targetDistanceCm / Math.Max(0.001, _maxDistanceCm));
                 double targetYawRadians = _targetYawDegrees * Math.PI / 180.0;
                 _targetPos = new PointF(
                     _startPos.X + (float)(Math.Sin(targetYawRadians) * arenaRadiusPx),
                     _startPos.Y - (float)(Math.Cos(targetYawRadians) * arenaRadiusPx));
-                _arena3D.TargetPoint = WorldPointFromAngles(_targetYawDegrees, _targetPitchDegrees);
+                _arena3D.TargetPoint = WorldPointFromAngles(_targetYawDegrees, _targetPitchDegrees, _targetDistanceCm);
                 _arena3D.ShowTarget = true;
 
                 // Accept every selected direction, including targets very close to 0°.
@@ -320,10 +337,11 @@ namespace grapher.DesktopSens.Views
             double targetAngle = NormalizeAngle(_targetYawDegrees);
             double flickAngle = NormalizeAngle(_landedYawDegrees);
             double signedRotationError = NormalizeSignedAngle(targetAngle - flickAngle);
-            double targetDistanceCm = _maxDistanceCm * targetAngle / 180.0;
-            double flickDistanceCm = _maxDistanceCm * flickAngle / 180.0;
-            double signedErrorCm = (flickDistanceCm - targetDistanceCm);
-            double finalErrorCm = Math.Abs(signedRotationError) * _maxDistanceCm / 180.0;
+            double targetDistanceCm = _targetDistanceCm;
+            double flickDistanceCm = CalculateFlickTravelCm();
+            double signedErrorCm = flickDistanceCm - targetDistanceCm;
+            double angularErrorCm = Math.Abs(signedRotationError) * _maxDistanceCm / 180.0;
+            double finalErrorCm = Math.Sqrt(angularErrorCm * angularErrorCm + signedErrorCm * signedErrorCm);
             double projectedDistancePx = (targetDistanceCm + signedErrorCm) * _pixelsPerCm;
             double actualDistancePx = flickDistanceCm * _pixelsPerCm;
             double peakVelocity = CalculatePeakVelocity();
@@ -365,6 +383,18 @@ namespace grapher.DesktopSens.Views
             _distanceZoneCounts[trial.DistanceZoneIndex]++;
             _profile.ModifiedTimestamp = DateTime.UtcNow;
             UpdateArena3D();
+        }
+
+        private double CalculateFlickTravelCm()
+        {
+            double totalCounts = 0.0;
+            for (int i = 0; i < _rawSamples.Count; i++)
+            {
+                double dx = _rawSamples[i].DX;
+                double dy = _rawSamples[i].DY;
+                totalCounts += Math.Sqrt(dx * dx + dy * dy);
+            }
+            return totalCounts * DesktopSensConstants.InchesToCm / _profile.MouseDPI;
         }
 
         private double CalculatePeakVelocity()
@@ -487,7 +517,7 @@ namespace grapher.DesktopSens.Views
             switch (_state)
             {
                 case TrialState.SetStartPoint: instruction = "Click to begin  |  Right-drag: look around  |  ESC: exit"; break;
-                case TrialState.SetTargetPoint: instruction = "Aiming target: " + NormalizeAngle(_cameraYawDegrees - _calibrationYawDegrees).ToString("0.0") + "°  |  Left-click to place target"; break;
+                case TrialState.SetTargetPoint: instruction = "Aim angle with mouse  |  Wheel: target distance " + _targetDistanceCm.ToString("0.0") + " cm  |  Left-click to place"; break;
                 case TrialState.Cooldown: instruction = "Crosshair locked on start point · 3 seconds…"; break;
                 case TrialState.Flicking: instruction = "Flick to target 2, then left-click to record landing"; break;
                 case TrialState.ASDWAdjusting: instruction = "W/A/S/D to aim crosshair at target 2  |  SPACE to calibrate"; break;
@@ -552,7 +582,7 @@ namespace grapher.DesktopSens.Views
             _arena3D.ShowStart = true;
         }
 
-        private Vector3 WorldPointFromAngles(double yawDegrees, double pitchDegrees)
+        private Vector3 WorldPointFromAngles(double yawDegrees, double pitchDegrees, double distanceCm)
         {
             // Construct the marker directly from its measured angular coordinates.
             // Do not infer its world angle from a projected screen pixel: that mapping
@@ -566,7 +596,9 @@ namespace grapher.DesktopSens.Views
                 horizontal * (float)Math.Cos(pitch) +
                 _calibrationUp * (float)Math.Sin(pitch));
             Vector3 eye = new Vector3(0f, 1.7f, 0f);
-            return eye + direction * CalibrationPlaneDistance;
+            float worldDistance = (float)(1.0 + 19.0 * Math.Max(0.0,
+                Math.Min(1.0, distanceCm / Math.Max(0.001, _maxDistanceCm))));
+            return eye + direction * worldDistance;
         }
 
         private Vector3 ScreenPointToWorld(PointF point)
