@@ -130,7 +130,7 @@ namespace grapher.DesktopSens.Views
                 }
                 UpdateArena3D();
             };
-            Cursor.Show();
+            Cursor.Hide();
 
             _startPos = new PointF(ClientSize.Width / 2f, ClientSize.Height / 2f);
             _currentCursorPos = _startPos;
