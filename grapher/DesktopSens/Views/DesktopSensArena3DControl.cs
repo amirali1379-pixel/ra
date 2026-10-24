@@ -55,8 +55,11 @@ namespace grapher.DesktopSens.Views
             DrawGround();
             DrawRings();
             DrawAxes();
-            DrawMarker(new Vector3(Target.X, 0.05f, -Target.Y), 0.22f, 1f, 0.57f, 0.25f);
-            if (ShowTarget) DrawLine(Vector3.Zero, new Vector3(Target.X, 0.05f, -Target.Y), 1f, 0.57f, 0.25f);
+            if (ShowTarget)
+            {
+                DrawMarker(new Vector3(Target.X, 0.05f, -Target.Y), 0.22f, 1f, 0.57f, 0.25f);
+                DrawLine(Vector3.Zero, new Vector3(Target.X, 0.05f, -Target.Y), 1f, 0.57f, 0.25f);
+            }
             DrawMarker(new Vector3(CursorWorld.X, 0.08f, -CursorWorld.Y), 0.13f, 0.25f, 0.95f, 0.72f);
             SwapBuffers();
         }
