@@ -13,6 +13,7 @@ namespace grapher.DesktopSens.Views
     public sealed class Directional8WayForm : Form
     {
         private readonly AccelGUI _accelGUI;
+        private readonly double _baseOutputDPI;
         private readonly TextBox _rightBox;
         private readonly TextBox _leftBox;
         private readonly TextBox _upBox;
@@ -22,6 +23,7 @@ namespace grapher.DesktopSens.Views
         public Directional8WayForm(AccelGUI accelGUI)
         {
             _accelGUI = accelGUI ?? throw new ArgumentNullException(nameof(accelGUI));
+            _baseOutputDPI = _accelGUI.MakeSettingsFromFields().outputDPI;
 
             Text = "Directional Sensitivity — 4 Way";
             StartPosition = FormStartPosition.CenterParent;
@@ -126,7 +128,7 @@ namespace grapher.DesktopSens.Views
                     return;
                 }
 
-                settings.outputDPI *= right;
+                settings.outputDPI = _baseOutputDPI * right;
                 settings.lrOutputDPIRatio = left / right;
                 settings.yxOutputDPIRatio = down / right;
                 settings.udOutputDPIRatio = up / down;
