@@ -215,6 +215,36 @@ namespace grapher.DesktopSens.Views
                 }
             }
             GL.End();
+
+            // Asymmetric world landmarks make camera rotation immediately visible.
+            // A perfectly uniform spherical grid looks unchanged while yawing, which
+            // made it seem as if mouse-look was not affecting the training environment.
+            for (int degree = 0; degree < 360; degree += 30)
+            {
+                double a = degree * Math.PI / 180.0;
+                float x = (float)Math.Sin(a) * 32f;
+                float z = (float)-Math.Cos(a) * 32f;
+                float height = degree % 90 == 0 ? 7.5f : 4.0f;
+                float halfWidth = degree % 90 == 0 ? 0.8f : 0.38f;
+                GL.Begin(PrimitiveType.Quads);
+                if (degree == 0) GL.Color3(0.15f, 0.85f, 0.55f);
+                else if (degree % 90 == 0) GL.Color3(0.9f, 0.55f, 0.18f);
+                else GL.Color3(0.24f, 0.42f, 0.52f);
+                GL.Vertex3(x - halfWidth, 0f, z);
+                GL.Vertex3(x + halfWidth, 0f, z);
+                GL.Vertex3(x + halfWidth, height, z);
+                GL.Vertex3(x - halfWidth, height, z);
+                GL.End();
+
+                // Bright cap and side marker give each landmark a clear silhouette.
+                GL.Begin(PrimitiveType.Lines);
+                GL.Color3(0.72f, 0.82f, 0.88f);
+                GL.Vertex3(x - halfWidth, height, z);
+                GL.Vertex3(x + halfWidth, height, z);
+                GL.Vertex3(x, height, z);
+                GL.Vertex3(x, height + 0.8f, z);
+                GL.End();
+            }
         }
 
         // Azimuth graduations around the cylindrical arena. 0° is the calibration
