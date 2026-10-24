@@ -55,9 +55,23 @@ namespace grapher.DesktopSens.Views
                 ? Vector3.Normalize(ViewDirection)
                 : new Vector3(0f, 0f, -1f);
             Vector3 eye = new Vector3(0f, 1.7f, 0f);
-            Vector3 up = Math.Abs(Vector3.Dot(look, Vector3.UnitY)) > 0.98f
-                ? Vector3.UnitZ
+
+            // Keep the camera's screen-up axis in the same calibration frame as the
+            // target rings. Using world UnitY here while look is built from the tilted
+            // calibration basis makes the rendered scene roll/drift relative to the
+            // fixed screen-space crosshair as the mouse moves.
+            Vector3 calibrationUp = CalibrationUp.LengthSquared > 0.0001f
+                ? Vector3.Normalize(CalibrationUp)
                 : Vector3.UnitY;
+            Vector3 up = calibrationUp - look * Vector3.Dot(calibrationUp, look);
+            if (up.LengthSquared < 0.0001f)
+            {
+                Vector3 fallback = Math.Abs(Vector3.Dot(look, Vector3.UnitY)) < 0.98f
+                    ? Vector3.UnitY
+                    : Vector3.UnitZ;
+                up = fallback - look * Vector3.Dot(fallback, look);
+            }
+            up = Vector3.Normalize(up);
             Matrix4 view = Matrix4.LookAt(eye, eye + look, up);
             GL.MatrixMode(MatrixMode.Modelview);
             GL.LoadMatrix(ref view);
