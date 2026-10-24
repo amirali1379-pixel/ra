@@ -322,11 +322,13 @@ namespace grapher.DesktopSens.Views
         {
             float nx = (point.X - _startPos.X) / Math.Max(1f, outerRadius);
             float ny = (point.Y - _startPos.Y) / Math.Max(1f, outerRadius);
+            float displayRadius = Math.Min(outerRadius, Math.Min(ClientSize.Width * 0.43f,
+                (ClientSize.Height - ClientSize.Height * 0.27f) * 0.72f));
             float depth = Math.Max(-0.98f, Math.Min(0.98f, ny));
             float perspective = 1f / (1f + 0.32f * depth);
             return new PointF(
-                ClientSize.Width / 2f + nx * outerRadius * perspective,
-                groundCenterY + depth * outerRadius * 0.48f * perspective);
+                ClientSize.Width / 2f + nx * displayRadius * perspective,
+                groundCenterY + depth * displayRadius * 0.48f * perspective);
         }
 
         protected override void OnPaint(PaintEventArgs e)
