@@ -102,6 +102,14 @@ namespace grapher.DesktopSens.Views
             double scale = _pixelsPerCm * DesktopSensConstants.InchesToCm / _profile.MouseDPI;
             _currentCursorPos.X += (float)(sample.DX * scale);
             _currentCursorPos.Y += (float)(sample.DY * scale);
+
+            // Raw input rotates the FPS view. _maxDistanceCm is calibrated as a 180-degree
+            // turn, so this conversion preserves the profile's DPI/sensitivity scale.
+            double cmPerCount = DesktopSensConstants.InchesToCm / _profile.MouseDPI;
+            float degreesPerCount = (float)(180.0 * cmPerCount / Math.Max(0.001, _maxDistanceCm));
+            _cameraYawDegrees += sample.DX * degreesPerCount;
+            _cameraPitchDegrees = Math.Max(-20f, Math.Min(35f,
+                _cameraPitchDegrees - sample.DY * degreesPerCount));
             ClampCursorToCanvas();
 
             if (_state == TrialState.Flicking)
@@ -377,11 +385,8 @@ namespace grapher.DesktopSens.Views
             _arena3D.PitchDegrees = _cameraPitchDegrees;
             _arena3D.Radius = (float)_maxDistanceCm;
             _arena3D.Target = new PointF(
-                (_targetPos.X - _startPos.X) / Math.Max(1f, _pixelsPerCm),
-                (_startPos.Y - _targetPos.Y) / Math.Max(1f, _pixelsPerCm));
-            _arena3D.CursorWorld = new PointF(
-                (_currentCursorPos.X - _startPos.X) / Math.Max(1f, _pixelsPerCm),
-                (_startPos.Y - _currentCursorPos.Y) / Math.Max(1f, _pixelsPerCm));
+                (float)((_targetPos.X - _startPos.X) / Math.Max(1f, _pixelsPerCm) * 180.0 / _maxDistanceCm),
+                (float)((_startPos.Y - _targetPos.Y) / Math.Max(1f, _pixelsPerCm) * 180.0 / _maxDistanceCm));
             _arena3D.ShowTarget = _state == TrialState.Cooldown || _state == TrialState.Flicking ||
                 _state == TrialState.ASDWAdjusting || _state == TrialState.TrialComplete;
             _arena3D.StatusText = _state.ToString();
@@ -390,15 +395,15 @@ namespace grapher.DesktopSens.Views
             switch (_state)
             {
                 case TrialState.SetStartPoint: instruction = "Click to begin  |  Right-drag: look around  |  ESC: exit"; break;
-                case TrialState.SetTargetPoint: instruction = "Click a target on the ground plane  |  Right-drag: look around"; break;
+                case TrialState.SetTargetPoint: instruction = "Click a target position  |  Mouse movement: look around"; break;
                 case TrialState.Cooldown: instruction = "Get ready…"; break;
-                case TrialState.Flicking: instruction = "Flick to the target, then click to record landing"; break;
+                case TrialState.Flicking: instruction = "Turn your view to the target, then click to record landing"; break;
                 case TrialState.ASDWAdjusting: instruction = "W/A/S/D to adjust  |  SPACE to save"; break;
                 default: instruction = "Trial saved  |  Click to start the next trial"; break;
             }
             _hud.Text = "DESKTOPSENS 3D  |  Yaw " + _cameraYawDegrees.ToString("0") + "°  Pitch " +
                 _cameraPitchDegrees.ToString("0") + "°  |  Trials " + _profile.Trials.Count + Environment.NewLine +
-                instruction + Environment.NewLine + "OpenGL perspective world · 360° camera · calibrated 180° turn-distance limit";
+                instruction + Environment.NewLine + "FPS range · raw mouse look · calibrated 180° turn-distance limit";
             _arena3D.Invalidate();
         }
 
