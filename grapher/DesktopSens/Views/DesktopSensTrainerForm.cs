@@ -346,55 +346,6 @@ namespace grapher.DesktopSens.Views
             return angle > 180.0 ? angle - 360.0 : angle;
         }
 
-        // Project the trainer's world-space ground plane through a rotatable perspective camera.
-        private PointF ProjectArenaPoint(PointF point, float outerRadius, float groundCenterY)
-        {
-            float radius = Math.Max(1f, outerRadius);
-            double worldX = (point.X - _startPos.X) / radius;
-            double worldZ = -(point.Y - _startPos.Y) / radius;
-            double yaw = _cameraYawDegrees * Math.PI / 180.0;
-            double pitch = _cameraPitchDegrees * Math.PI / 180.0;
-            const double cameraDistance = 3.2;
-            const double cameraHeight = 1.15;
-            double camX = Math.Sin(yaw) * cameraDistance;
-            double camZ = -Math.Cos(yaw) * cameraDistance;
-            double dx = worldX - camX;
-            double dz = worldZ - camZ;
-            double cameraX = dx * Math.Cos(yaw) - dz * Math.Sin(yaw);
-            double depthBeforePitch = dx * Math.Sin(yaw) + dz * Math.Cos(yaw);
-            double cameraY = -cameraHeight;
-            double depth = depthBeforePitch * Math.Cos(pitch) - cameraY * Math.Sin(pitch);
-            double vertical = cameraY * Math.Cos(pitch) + depthBeforePitch * Math.Sin(pitch);
-            if (depth < 0.08) depth = 0.08;
-            double focal = Math.Min(ClientSize.Width, ClientSize.Height) * 1.05;
-            float horizonY = ClientSize.Height * 0.27f;
-            return new PointF((float)(ClientSize.Width * 0.5 + cameraX * focal / depth),
-                (float)(horizonY - vertical * focal / depth));
-        }
-
-        private void DrawArenaCircle(Graphics g, Pen pen, float radiusPixels, float outerRadius, float groundCenterY)
-        {
-            const int segments = 96;
-            PointF previous = PointF.Empty;
-            for (int i = 0; i <= segments; i++)
-            {
-                double a = i * Math.PI * 2.0 / segments;
-                PointF worldPoint = new PointF(_startPos.X + (float)Math.Cos(a) * radiusPixels,
-                    _startPos.Y - (float)Math.Sin(a) * radiusPixels);
-                PointF projected = ProjectArenaPoint(worldPoint, outerRadius, groundCenterY);
-                if (i > 0 && IsOnScreen(previous) && IsOnScreen(projected))
-                    g.DrawLine(pen, previous, projected);
-                previous = projected;
-            }
-        }
-
-        private bool IsOnScreen(PointF p)
-        {
-            return !float.IsNaN(p.X) && !float.IsInfinity(p.X) &&
-                !float.IsNaN(p.Y) && !float.IsInfinity(p.Y) &&
-                Math.Abs(p.X) < ClientSize.Width * 8f && Math.Abs(p.Y) < ClientSize.Height * 8f;
-        }
-
         protected override void OnMouseMove(MouseEventArgs e)
         {
             if (_cameraDragging)
