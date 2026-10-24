@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using grapher.Models.Mouse;
@@ -16,6 +15,7 @@ namespace grapher.DesktopSens.Views
         private readonly List<MouseSample> _rawSamples = new List<MouseSample>();
         private readonly Stopwatch _trialStopwatch = new Stopwatch();
         private readonly Timer _cooldownTimer;
+        private readonly DesktopSensArena3DControl _arena3D;
 
         private enum TrialState { SetStartPoint, SetTargetPoint, Cooldown, Flicking, ASDWAdjusting, TrialComplete }
         private TrialState _state = TrialState.SetStartPoint;
@@ -57,11 +57,19 @@ namespace grapher.DesktopSens.Views
             BackColor = Color.FromArgb(24, 26, 29);
             DoubleBuffered = true;
             KeyPreview = true;
+            _arena3D = new DesktopSensArena3DControl { Dock = DockStyle.Fill, Radius = (float)_maxDistanceCm };
+            Controls.Add(_arena3D);
+            _arena3D.SendToBack();
+            _arena3D.MouseDown += (s, e) => OnMouseDown(e);
+            _arena3D.MouseMove += (s, e) => OnMouseMove(e);
+            _arena3D.MouseUp += (s, e) => OnMouseUp(e);
+            _arena3D.MouseWheel += (s, e) => { _cameraPitchDegrees = Math.Max(5f, Math.Min(65f, _cameraPitchDegrees + e.Delta / 120f)); InvalidateArena(); }
             Cursor.Hide();
 
             _startPos = new PointF(ClientSize.Width / 2f, ClientSize.Height / 2f);
             _currentCursorPos = _startPos;
             MoveSystemCursorToCanvas();
+            UpdateArena3D();
 
             _cooldownTimer = new Timer { Interval = 3000 };
             _cooldownTimer.Tick += OnCooldownFinished;
@@ -94,7 +102,7 @@ namespace grapher.DesktopSens.Views
                 _rawSamples.Add(sample);
 
             MoveSystemCursorToCanvas();
-            Invalidate();
+            UpdateArena3D();
         }
 
         protected override void OnMouseDown(MouseEventArgs e)
@@ -158,7 +166,7 @@ namespace grapher.DesktopSens.Views
                 _targetPos = PointF.Empty;
             }
 
-            Invalidate();
+            UpdateArena3D();
         }
 
         private void OnCooldownFinished(object sender, EventArgs e)
@@ -167,7 +175,7 @@ namespace grapher.DesktopSens.Views
             _state = TrialState.Flicking;
             _rawSamples.Clear();
             _trialStopwatch.Restart();
-            Invalidate();
+            UpdateArena3D();
         }
 
         protected override void OnKeyDown(KeyEventArgs e)
@@ -195,7 +203,7 @@ namespace grapher.DesktopSens.Views
 
                 e.Handled = true;
                 e.SuppressKeyPress = true;
-                Invalidate();
+                UpdateArena3D();
             }
         }
 
@@ -260,6 +268,7 @@ namespace grapher.DesktopSens.Views
             _angleZoneCounts[trial.AngleZoneIndex]++;
             _distanceZoneCounts[trial.DistanceZoneIndex]++;
             _profile.ModifiedTimestamp = DateTime.UtcNow;
+            UpdateArena3D();
         }
 
         private double CalculatePeakVelocity()
@@ -387,7 +396,7 @@ namespace grapher.DesktopSens.Views
                 _cameraYawDegrees = _cameraDragYaw + (e.X - _cameraDragOrigin.X) * 0.45f;
                 _cameraPitchDegrees = Math.Max(5f, Math.Min(65f,
                     _cameraDragPitch + (e.Y - _cameraDragOrigin.Y) * 0.25f));
-                Invalidate();
+                UpdateArena3D();
                 return;
             }
             base.OnMouseMove(e);
@@ -404,146 +413,34 @@ namespace grapher.DesktopSens.Views
             base.OnMouseUp(e);
         }
 
+        private void UpdateArena3D()
+        {
+            if (_arena3D == null || _arena3D.IsDisposed) return;
+            _arena3D.YawDegrees = _cameraYawDegrees;
+            _arena3D.PitchDegrees = _cameraPitchDegrees;
+            _arena3D.Radius = (float)_maxDistanceCm;
+            _arena3D.Target = new PointF(
+                (_targetPos.X - _startPos.X) / Math.Max(1f, _pixelsPerCm),
+                (_startPos.Y - _targetPos.Y) / Math.Max(1f, _pixelsPerCm));
+            _arena3D.CursorWorld = new PointF(
+                (_currentCursorPos.X - _startPos.X) / Math.Max(1f, _pixelsPerCm),
+                (_startPos.Y - _currentCursorPos.Y) / Math.Max(1f, _pixelsPerCm));
+            _arena3D.ShowTarget = _state == TrialState.Cooldown || _state == TrialState.Flicking ||
+                _state == TrialState.ASDWAdjusting || _state == TrialState.TrialComplete;
+            _arena3D.StatusText = _state.ToString();
+            _arena3D.TrialCount = _profile.Trials.Count;
+            _arena3D.Invalidate();
+        }
+
+        private void InvalidateArena()
+        {
+            UpdateArena3D();
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
+            // OpenGL renders the arena; no GDI+ pseudo-3D scene is drawn here.
             base.OnPaint(e);
-            Graphics g = e.Graphics;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-
-            float outerRadius = (float)(_maxDistanceCm * _pixelsPerCm);
-            float horizonY = ClientSize.Height * 0.27f;
-            float groundCenterY = ClientSize.Height * 0.68f;
-            float sceneRadius = Math.Min(outerRadius, Math.Min(ClientSize.Width * 0.43f,
-                (ClientSize.Height - horizonY) * 0.72f));
-            float ellipseHeight = sceneRadius * 0.48f;
-
-            using (var background = new LinearGradientBrush(ClientRectangle,
-                Color.FromArgb(12, 16, 22), Color.FromArgb(31, 39, 46),
-                LinearGradientMode.Vertical))
-            using (var skyBrush = new LinearGradientBrush(
-                new Rectangle(0, 0, ClientSize.Width, Math.Max(1, (int)horizonY)),
-                Color.FromArgb(10, 14, 20), Color.FromArgb(30, 40, 48),
-                LinearGradientMode.Vertical))
-            using (var floorBrush = new LinearGradientBrush(
-                new Rectangle(0, (int)horizonY, ClientSize.Width,
-                    Math.Max(1, ClientSize.Height - (int)horizonY)),
-                Color.FromArgb(25, 34, 41), Color.FromArgb(10, 14, 19),
-                LinearGradientMode.Vertical))
-            using (var horizonPen = new Pen(Color.FromArgb(95, 94, 139, 148), 1.2f))
-            using (var gridPen = new Pen(Color.FromArgb(35, 123, 158, 164), 1f))
-            using (var zonePen = new Pen(Color.FromArgb(65, 130, 163, 169), 1f))
-            using (var usedZonePen = new Pen(Color.FromArgb(185, 83, 185, 151), 1.8f))
-            using (var ringPen = new Pen(Color.FromArgb(90, 132, 168, 174), 1.1f))
-            using (var outerPen = new Pen(Color.FromArgb(205, 156, 202, 207), 2f))
-            using (var targetPen = new Pen(Color.FromArgb(220, 242, 173, 94), 2f))
-            using (var cursorPen = new Pen(Color.FromArgb(235, 228, 239, 240), 1.6f))
-            using (var textBrush = new SolidBrush(Color.FromArgb(210, 202, 216, 220)))
-            using (var mutedBrush = new SolidBrush(Color.FromArgb(165, 151, 171, 178)))
-            using (var targetBrush = new SolidBrush(Color.FromArgb(240, 242, 173, 94)))
-            using (var cursorBrush = new SolidBrush(Color.FromArgb(235, 104, 218, 183)))
-            using (var statusBrush = new SolidBrush(Color.FromArgb(245, 231, 237, 239)))
-            using (var statusFont = new Font("Arial", 16, FontStyle.Bold))
-            using (var smallFont = new Font("Arial", 9))
-            using (var compassFont = new Font("Arial", 10, FontStyle.Bold))
-            {
-                PointF origin = ProjectArenaPoint(_startPos, outerRadius, groundCenterY);
-                g.FillRectangle(background, ClientRectangle);
-                g.FillRectangle(skyBrush, 0, 0, ClientSize.Width, horizonY);
-                g.FillRectangle(floorBrush, 0, horizonY, ClientSize.Width,
-                    ClientSize.Height - horizonY);
-                g.DrawLine(horizonPen, 0, horizonY, ClientSize.Width, horizonY);
-
-                // World-space floor grid, projected through the rotatable 3D camera.
-                for (int i = -10; i <= 10; i++)
-                {
-                    PointF a = ProjectArenaPoint(new PointF(_startPos.X + i * outerRadius / 10f, _startPos.Y - outerRadius), outerRadius, groundCenterY);
-                    PointF b = ProjectArenaPoint(new PointF(_startPos.X + i * outerRadius / 10f, _startPos.Y + outerRadius), outerRadius, groundCenterY);
-                    if (IsOnScreen(a) && IsOnScreen(b)) g.DrawLine(gridPen, a, b);
-                }
-                for (int i = -10; i <= 10; i++)
-                {
-                    PointF a = ProjectArenaPoint(new PointF(_startPos.X - outerRadius, _startPos.Y + i * outerRadius / 10f), outerRadius, groundCenterY);
-                    PointF b = ProjectArenaPoint(new PointF(_startPos.X + outerRadius, _startPos.Y + i * outerRadius / 10f), outerRadius, groundCenterY);
-                    if (IsOnScreen(a) && IsOnScreen(b)) g.DrawLine(gridPen, a, b);
-                }
-
-                // The playable plane is a 360-degree arena, shown as a perspective ellipse.
-                // The outer boundary still means exactly the 180-degree CS2 turn limit.
-                // Do not draw a separate tiny base circle: the spawn is the projected origin,
-                // and all distance rings share the same calibrated world-space scale.
-                g.DrawString("START / SPAWN", smallFont, mutedBrush,
-                    origin.X + 8, origin.Y + 8);
-
-                double[] turnRings = { 45.0, 90.0, 135.0 };
-                foreach (double degrees in turnRings)
-                {
-                    float r = (float)(degrees / DesktopSensConstants.MaxGameTurnDegrees * outerRadius);
-                    DrawArenaCircle(g, ringPen, r, outerRadius, groundCenterY);
-                }
-                DrawArenaCircle(g, outerPen, outerRadius, outerRadius, groundCenterY);
-                g.DrawString("180° TURN DISTANCE LIMIT", compassFont, textBrush, 20, ClientSize.Height - 52);
-
-                // Angular sectors are drawn onto the projected plane, not as a flat screen grid.
-                for (int i = 0; i < DesktopSensConstants.AngularZoneCount; i++)
-                {
-                    double a = i * DesktopSensConstants.AngularZoneSizeDegrees * Math.PI / 180.0;
-                    PointF edge = new PointF(
-                        _startPos.X + (float)Math.Cos(a) * (float)(_maxDistanceCm * _pixelsPerCm),
-                        _startPos.Y + (float)Math.Sin(a) * (float)(_maxDistanceCm * _pixelsPerCm));
-                    PointF projectedEdge = ProjectArenaPoint(edge,
-                        (float)(_maxDistanceCm * _pixelsPerCm), groundCenterY);
-                    using (var sectorPen = new Pen(_angleZoneCounts[i] > 0
-                        ? Color.FromArgb(185, 83, 185, 151)
-                        : Color.FromArgb(48, 130, 163, 169), _angleZoneCounts[i] > 0 ? 1.8f : 1f))
-                        g.DrawLine(sectorPen, origin.X, origin.Y, projectedEdge.X, projectedEdge.Y);
-
-                    if (_angleZoneCounts[i] > 0)
-                    {
-                        using (var countBrush = new SolidBrush(Color.FromArgb(230, 100, 225, 177)))
-                            g.DrawString(_angleZoneCounts[i].ToString(), smallFont, countBrush,
-                                projectedEdge.X - 5, projectedEdge.Y - 13);
-                    }
-                }
-
-                g.DrawString("CAMERA: right-drag to look around 360°", smallFont, textBrush, 20, 72);
-                g.DrawString("Yaw " + _cameraYawDegrees.ToString("0") + "°   Pitch " + _cameraPitchDegrees.ToString("0") + "°", smallFont, mutedBrush, 20, 90);
-
-                if (_state != TrialState.SetStartPoint)
-                {
-                    using (var startBrush = new SolidBrush(Color.FromArgb(235, 101, 207, 178)))
-                        g.FillEllipse(startBrush, origin.X - 6, origin.Y - 6, 12, 12);
-                }
-
-                if (_state == TrialState.Cooldown || _state == TrialState.Flicking ||
-                    _state == TrialState.ASDWAdjusting || _state == TrialState.TrialComplete)
-                {
-                    PointF target = ProjectArenaPoint(_targetPos, outerRadius, groundCenterY);
-                    g.DrawLine(targetPen, origin.X, origin.Y, target.X, target.Y);
-                    g.DrawLine(targetPen, target.X - 9, target.Y, target.X + 9, target.Y);
-                    g.DrawLine(targetPen, target.X, target.Y - 9, target.X, target.Y + 9);
-                    g.FillEllipse(targetBrush, target.X - 5, target.Y - 5, 10, 10);
-                }
-
-                PointF cursor = ProjectArenaPoint(_currentCursorPos, outerRadius, groundCenterY);
-                g.DrawLine(cursorPen, cursor.X - 9, cursor.Y, cursor.X + 9, cursor.Y);
-                g.DrawLine(cursorPen, cursor.X, cursor.Y - 9, cursor.X, cursor.Y + 9);
-                g.FillEllipse(cursorBrush, cursor.X - 4, cursor.Y - 4, 8, 8);
-
-                string status;
-                switch (_state)
-                {
-                    case TrialState.SetStartPoint: status = "1/2: Click to enter the 3D arena"; break;
-                    case TrialState.SetTargetPoint: status = "2/2: Select any direction around you (360°)"; break;
-                    case TrialState.Cooldown: status = "Get ready (3 seconds)..."; break;
-                    case TrialState.Flicking: status = "Flick to the target, then click to record landing"; break;
-                    case TrialState.ASDWAdjusting: status = "Adjust with W/A/S/D, then press SPACE to save"; break;
-                    default: status = "Trial saved. Click to start another trial (ESC to exit)."; break;
-                }
-                g.DrawString(status, statusFont, statusBrush, 20, 20);
-                g.DrawString("3D WORLD CAMERA  |  360° LOOK  |  180° CS2 TURN DISTANCE CAP  |  Trials: " +
-                    _profile.Trials.Count, smallFont, textBrush, 20, 48);
-            }
         }
     }
 }
