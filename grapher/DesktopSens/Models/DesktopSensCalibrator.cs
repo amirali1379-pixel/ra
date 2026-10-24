@@ -170,6 +170,14 @@ namespace grapher.DesktopSens.Models
                 }
             }
 
+            // Fit a separate periodic rotation curve for each distance zone. Each fit uses
+            // measured cells from the 32 angular axes; it never collapses all distances into
+            // one global rotation model.
+            CalibrateRotationModels(profile, cells);
+
+            profile.SchemaVersion = DesktopSensConstants.CurrentSchemaVersion;
+            profile.ModelVersion = DesktopSensConstants.CurrentModelVersion;
+
             for (int angle = 0; angle < DesktopSensConstants.AngularZoneCount; angle++)
             {
                 if (angleCounts[angle] > 0)
@@ -197,6 +205,39 @@ namespace grapher.DesktopSens.Models
             profile.OverallConfidence = cells.Count == 0 ? 0.0 :
                 cells.Values.Average(c => Confidence(c.SignedErrors.Count));
             profile.ModifiedTimestamp = DateTime.UtcNow;
+        }
+
+
+        private static void CalibrateRotationModels(DesktopSensProfile profile, Dictionary<int, ZoneData> cells)
+        {
+            int distanceCount = DesktopSensConstants.DistanceZoneCount;
+            if (profile.RotationModelsByDistanceZone == null ||
+                profile.RotationModelsByDistanceZone.Length != distanceCount)
+                profile.RotationModelsByDistanceZone = new RotationModel[distanceCount];
+
+            for (int distance = 0; distance < distanceCount; distance++)
+            {
+                var angles = new List<double>();
+                var corrections = new List<double>();
+                var weights = new List<double>();
+
+                for (int angle = 0; angle < DesktopSensConstants.AngularZoneCount; angle++)
+                {
+                    int cellIndex = DesktopSensProfile.GetCellIndex(angle, distance);
+                    if (!cells.TryGetValue(cellIndex, out ZoneData zone) || zone.RotationErrors.Count == 0)
+                        continue;
+
+                    angles.Add(ZoneCalculations.AngleZoneCenterDegrees(angle));
+                    corrections.Add(zone.MeanRotationError);
+                    weights.Add(zone.RotationErrors.Count);
+                }
+
+                profile.RotationModelsByDistanceZone[distance] = DesktopSensRotationModelFitter.Fit(
+                    angles.ToArray(),
+                    corrections.ToArray(),
+                    weights.ToArray(),
+                    DesktopSensConstants.RotationFourierOrder);
+            }
         }
 
         private static void ResetArray(double[] values, double defaultValue)
