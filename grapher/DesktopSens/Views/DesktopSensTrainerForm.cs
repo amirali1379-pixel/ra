@@ -69,7 +69,7 @@ namespace grapher.DesktopSens.Views
             _arena3D.MouseDown += (s, e) => OnMouseDown(e);
             _arena3D.MouseMove += (s, e) => OnMouseMove(e);
             _arena3D.MouseUp += (s, e) => OnMouseUp(e);
-            _arena3D.MouseWheel += (s, e) => { _cameraPitchDegrees = Math.Max(5f, Math.Min(65f, _cameraPitchDegrees + e.Delta / 120f)); InvalidateArena(); }
+            _arena3D.MouseWheel += (s, e) => { _cameraPitchDegrees = Math.Max(5f, Math.Min(65f, _cameraPitchDegrees + e.Delta / 120f)); InvalidateArena(); };
             Cursor.Hide();
 
             _startPos = new PointF(ClientSize.Width / 2f, ClientSize.Height / 2f);
@@ -119,7 +119,7 @@ namespace grapher.DesktopSens.Views
                 _cameraDragOrigin = e.Location;
                 _cameraDragYaw = _cameraYawDegrees;
                 _cameraDragPitch = _cameraPitchDegrees;
-                Capture = true;
+                _arena3D.Capture = true;
                 return;
             }
             if (e.Button != MouseButtons.Left) return;
@@ -364,7 +364,7 @@ namespace grapher.DesktopSens.Views
             if (e.Button == MouseButtons.Right && _cameraDragging)
             {
                 _cameraDragging = false;
-                Capture = false;
+                _arena3D.Capture = false;
                 return;
             }
             base.OnMouseUp(e);
