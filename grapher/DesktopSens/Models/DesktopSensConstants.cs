@@ -2,11 +2,12 @@
 {
     public static class DesktopSensConstants
     {
-        // Angular
+        // Angular: 32 bins cover the full 360-degree mouse-movement direction.
         public const int AngularZoneCount = 32;
         public const double AngularZoneSizeDegrees = 11.25;
 
-        // Distance
+        // Distance zones are mapped dynamically from 0-3 cm base sensitivity to the
+        // physical mouse travel that corresponds to a 180-degree CS2 turn.
         public const int DistanceZoneCount = 46;
         public const int MicroZoneCount = 6;
         public const int ShortZoneCount = 7;
@@ -37,6 +38,10 @@
         public const double MovementEndVelocityThresholdPxPerSec = 5.0;
         public const double StabilizationPeriodMs = 150.0;
 
+        // CS2 default m_yaw: one raw mouse count rotates the view by sensitivity * 0.022 degrees.
+        public const double Cs2YawDegreesPerCount = 0.022;
+        public const double MaxGameTurnDegrees = 180.0;
+
         // LUT
         public const int LutMaxPoints = 257;
         public const int LutMinPoints = 2;
@@ -48,8 +53,8 @@
         public const double TargetPollingRateHz = 1000;
 
         // Schema
-        public const int CurrentSchemaVersion = 3;
-        public const int CurrentModelVersion = 3;
+        public const int CurrentSchemaVersion = 4;
+        public const int CurrentModelVersion = 4;
 
         // Conversion
         public const double InchesToCm = 2.54;
