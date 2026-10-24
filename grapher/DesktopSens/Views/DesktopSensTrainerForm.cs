@@ -99,6 +99,16 @@ namespace grapher.DesktopSens.Views
 
         protected override void OnMouseDown(MouseEventArgs e)
         {
+            if (e.Button == MouseButtons.Right)
+            {
+                _cameraDragging = true;
+                _cameraDragOrigin = e.Location;
+                _cameraDragYaw = _cameraYawDegrees;
+                _cameraDragPitch = _cameraPitchDegrees;
+                Capture = true;
+                return;
+            }
+            if (e.Button != MouseButtons.Left) return;
             base.OnMouseDown(e);
             var clickedPoint = new PointF(
                 Math.Max(0, Math.Min(ClientSize.Width - 1, e.X)),
@@ -370,19 +380,6 @@ namespace grapher.DesktopSens.Views
                 Math.Abs(p.X) < ClientSize.Width * 8f && Math.Abs(p.Y) < ClientSize.Height * 8f;
         }
 
-        protected override void OnMouseDown(MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Right)
-            {
-                _cameraDragging = true;
-                _cameraDragOrigin = e.Location;
-                _cameraDragYaw = _cameraYawDegrees;
-                _cameraDragPitch = _cameraPitchDegrees;
-                Capture = true;
-                return;
-            }
-            base.OnMouseDown(e);
-            if (e.Button != MouseButtons.Left) return;
         protected override void OnMouseMove(MouseEventArgs e)
         {
             if (_cameraDragging)
