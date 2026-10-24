@@ -7,21 +7,21 @@
         public const double AngularZoneSizeDegrees = 11.25;
 
         // Distance
-        public const int DistanceZoneCount = 23;
+        public const int DistanceZoneCount = 46;
         public const int MicroZoneCount = 6;
         public const int ShortZoneCount = 7;
         public const int MediumZoneCount = 5;
-        public const int LongZoneCount = 5;
+        public const int LongZoneCount = 28;
 
         public const double MicroZoneSizeCm = 0.5;
         public const double ShortZoneSizeCm = 1.0;
         public const double MediumZoneSizeCm = 2.0;
-        public const double LongZoneSizeCm = 4.0;
+        public const double LongZoneSizeCm = 80.0 / LongZoneCount;
 
         public const double MicroZoneMaxCm = 3.0;
         public const double ShortZoneMaxCm = 10.0;
         public const double MediumZoneMaxCm = 20.0;
-        public const double LongZoneMaxCm = 40.0;
+        public const double LongZoneMaxCm = 100.0;
 
         public const int ShortZoneStartIndex = 6;
         public const int MediumZoneStartIndex = 13;
@@ -48,8 +48,8 @@
         public const double TargetPollingRateHz = 1000;
 
         // Schema
-        public const int CurrentSchemaVersion = 2;
-        public const int CurrentModelVersion = 2;
+        public const int CurrentSchemaVersion = 3;
+        public const int CurrentModelVersion = 3;
 
         // Conversion
         public const double InchesToCm = 2.54;
