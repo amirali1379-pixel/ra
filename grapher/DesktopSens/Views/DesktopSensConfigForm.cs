@@ -96,13 +96,14 @@ namespace grapher.DesktopSens.Views
                     // Directional sensitivity is independently reduced to the four cardinal axes.
                     DirectionalCalibrator.Calibrate(_profile);
                     SaveProfileToDisk();
-                    _profileStatus.Text = "4-way profile saved | R " + _profile.RightSensitivityFactor.ToString("0.###", CultureInfo.InvariantCulture) +
-                        " L " + _profile.LeftSensitivityFactor.ToString("0.###", CultureInfo.InvariantCulture) +
-                        " U " + _profile.UpSensitivityFactor.ToString("0.###", CultureInfo.InvariantCulture) +
-                        " D " + _profile.DownSensitivityFactor.ToString("0.###", CultureInfo.InvariantCulture);
+                    _profileStatus.Text = "4-way base (0-3 cm) saved | R " + _profile.RightSensitivityFactor.ToString("0.###", CultureInfo.InvariantCulture) +
+                        " (" + (_profile.RightSensitivityConfidence * 100.0).ToString("0", CultureInfo.InvariantCulture) + "%) L " + _profile.LeftSensitivityFactor.ToString("0.###", CultureInfo.InvariantCulture) +
+                        " (" + (_profile.LeftSensitivityConfidence * 100.0).ToString("0", CultureInfo.InvariantCulture) + "%) U " + _profile.UpSensitivityFactor.ToString("0.###", CultureInfo.InvariantCulture) +
+                        " (" + (_profile.UpSensitivityConfidence * 100.0).ToString("0", CultureInfo.InvariantCulture) + "%) D " + _profile.DownSensitivityFactor.ToString("0.###", CultureInfo.InvariantCulture) +
+                        " (" + (_profile.DownSensitivityConfidence * 100.0).ToString("0", CultureInfo.InvariantCulture) + "%)";
                     MessageBox.Show(this,
                         "Four-way calibration profile saved to:\n" + ProfilePath +
-                        "\n\nUse 'Apply Saved 4-Way Profile to RawAccel' to activate these factors.",
+                        "\n\nShort flicks up to 3 cm train directional base sensitivity; longer flicks train acceleration. Apply the saved profile to activate the four directional factors.",
                         "Desktop Sens", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
