@@ -18,6 +18,8 @@ namespace grapher.DesktopSens.Views
         private readonly Timer _cooldownTimer;
         private readonly DesktopSensArena3DControl _arena3D;
         private readonly Label _hud;
+        private readonly Label[] _degreeLabels = new Label[36];
+        private readonly Label _selectedAngleLabel;
 
         private enum TrialState { SetStartPoint, SetTargetPoint, Cooldown, Flicking, ASDWAdjusting, TrialComplete }
         private TrialState _state = TrialState.SetStartPoint;
@@ -77,6 +79,36 @@ namespace grapher.DesktopSens.Views
                 BackColor = Color.FromArgb(220, 12, 16, 22), ForeColor = Color.Gainsboro,
                 Font = new Font("Segoe UI", 11f, FontStyle.Bold) };
             Controls.Add(_hud);
+            // Screen-space compass labels make every 10-degree azimuth explicit.
+            for (int i = 0; i < _degreeLabels.Length; i++)
+            {
+                int degree = i * 10;
+                var label = new Label
+                {
+                    AutoSize = false,
+                    Size = new Size(42, 20),
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    Text = degree + "°",
+                    Font = new Font("Segoe UI", degree % 30 == 0 ? 9f : 8f,
+                        degree % 30 == 0 ? FontStyle.Bold : FontStyle.Regular),
+                    ForeColor = degree == 0 ? Color.LightGreen :
+                        degree % 30 == 0 ? Color.Khaki : Color.Gainsboro,
+                    BackColor = Color.FromArgb(190, 12, 16, 22),
+                    TabStop = false
+                };
+                _degreeLabels[i] = label;
+                Controls.Add(label);
+            }
+            _selectedAngleLabel = new Label
+            {
+                AutoSize = true,
+                Padding = new Padding(6, 3, 6, 3),
+                BackColor = Color.FromArgb(225, 90, 42, 12),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 10f, FontStyle.Bold),
+                Text = "TARGET POINT: 0.0°"
+            };
+            Controls.Add(_selectedAngleLabel);
             _hud.BringToFront();
             _arena3D.MouseDown += (s, e) => OnMouseDown(e);
             _arena3D.MouseMove += (s, e) => OnMouseMove(e);
@@ -472,7 +504,31 @@ namespace grapher.DesktopSens.Views
             _hud.Text = "DESKTOPSENS 3D  |  Relative yaw " + relativeYaw.ToString("0.0") + "°  Pitch " +
                 _cameraPitchDegrees.ToString("0.0") + "°  |  Trials " + _profile.Trials.Count + Environment.NewLine +
                 angleReadout + Environment.NewLine + instruction +
-                Environment.NewLine + "360° arena · angles relative to the fixed 0° start";
+                Environment.NewLine + "360° arena · labels every 10° from fixed 0° start";
+
+            float cx = ClientSize.Width * 0.5f;
+            float cy = ClientSize.Height * 0.5f;
+            float compassRadius = Math.Max(100f, Math.Min(ClientSize.Width, ClientSize.Height) * 0.34f);
+            for (int i = 0; i < _degreeLabels.Length; i++)
+            {
+                double radians = i * 10.0 * Math.PI / 180.0;
+                Label label = _degreeLabels[i];
+                label.Location = new Point(
+                    (int)(cx + Math.Sin(radians) * compassRadius - label.Width / 2f),
+                    (int)(cy - Math.Cos(radians) * compassRadius - label.Height / 2f));
+            }
+
+            double shownAngle = _state == TrialState.SetTargetPoint ? relativeYaw : _targetYawDegrees;
+            _selectedAngleLabel.Text = "TARGET POINT: " + shownAngle.ToString("0.0") + "°";
+            PointF angleAnchor = _state == TrialState.SetTargetPoint
+                ? new PointF(cx + (float)(Math.Sin(relativeYaw * Math.PI / 180.0) * compassRadius),
+                    cy - (float)(Math.Cos(relativeYaw * Math.PI / 180.0) * compassRadius))
+                : _targetPos;
+            _selectedAngleLabel.Location = new Point(
+                (int)(angleAnchor.X - _selectedAngleLabel.Width / 2f),
+                (int)(angleAnchor.Y - _selectedAngleLabel.Height - 10f));
+            _selectedAngleLabel.BringToFront();
+            _hud.BringToFront();
             _arena3D.Invalidate();
         }
 
