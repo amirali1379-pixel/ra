@@ -453,6 +453,7 @@ namespace grapher.DesktopSens.Views
             _arena3D.StartPoint = _calibrationOrigin;
             _arena3D.TargetPoint = WorldPointFromAngles(_targetYawDegrees, _targetPitchDegrees);
             _arena3D.CalibrationRight = _calibrationRight;
+            _arena3D.CalibrationForward = _calibrationForward;
             _arena3D.CalibrationUp = _calibrationUp;
             _arena3D.ShowStart = _state != TrialState.SetStartPoint;
             _arena3D.ShowTarget = _state == TrialState.Cooldown || _state == TrialState.Flicking ||
